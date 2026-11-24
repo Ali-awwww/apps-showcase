@@ -7,6 +7,7 @@ import {
   X,
 } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { sendFirebaseAiChat } from '../services/aiChat';
 import { buildAppsContextPayload } from '../services/chatContext';
 import { ReadmesMap, ReleasesMap } from '../types/app';
 
@@ -70,7 +71,7 @@ export function GeminiChatbot({ releases, readmes }: GeminiChatbotProps) {
     }
   }, [isOpen]);
 
-  const sendMessageToServer = async (
+  const sendMessageToAssistant = async (
     textToSend: string,
     baseHistory: ChatMessage[]
   ) => {
@@ -86,28 +87,7 @@ export function GeminiChatbot({ releases, readmes }: GeminiChatbotProps) {
           text: m.text,
         }));
 
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: conversationPayload,
-          appsContext,
-        }),
-      });
-
-      const data = (await response.json().catch(() => ({}))) as {
-        reply?: string;
-        error?: string;
-      };
-
-      if (!response.ok || !data.reply) {
-        throw new Error(
-          data.error ||
-            'تعذّر الحصول على رد من المساعد الآن. يرجى إعادة المحاولة.'
-        );
-      }
+      const data = await sendFirebaseAiChat(conversationPayload, appsContext);
 
       const assistantReply: ChatMessage = {
         id: `assistant-${Date.now()}`,
@@ -144,7 +124,7 @@ export function GeminiChatbot({ releases, readmes }: GeminiChatbotProps) {
     setMessages(nextHistory);
     setInputValue('');
 
-    await sendMessageToServer(trimmed, nextHistory);
+    await sendMessageToAssistant(trimmed, nextHistory);
   };
 
   const handleFormSubmit = (e: FormEvent) => {
@@ -156,7 +136,7 @@ export function GeminiChatbot({ releases, readmes }: GeminiChatbotProps) {
     if (!failedMessageText || isSending) {
       return;
     }
-    void sendMessageToServer(failedMessageText, messages);
+    void sendMessageToAssistant(failedMessageText, messages);
   };
 
   const handleResetChat = () => {
