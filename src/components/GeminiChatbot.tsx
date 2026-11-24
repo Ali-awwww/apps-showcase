@@ -7,7 +7,6 @@ import {
   X,
 } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { sendFirebaseAiChat } from '../services/aiChat';
 import { buildAppsContextPayload } from '../services/chatContext';
 import { ReadmesMap, ReleasesMap } from '../types/app';
 
@@ -87,7 +86,27 @@ export function GeminiChatbot({ releases, readmes }: GeminiChatbotProps) {
           text: m.text,
         }));
 
-      const data = await sendFirebaseAiChat(conversationPayload, appsContext);
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: conversationPayload,
+          appsContext,
+        }),
+      });
+
+      const data = (await response.json().catch(() => null)) as {
+        reply?: string;
+        error?: string;
+      } | null;
+
+      if (!response.ok || !data?.reply) {
+        throw new Error(
+          data?.error || 'تعذّر الحصول على رد من المساعد الآن. يرجى المحاولة مرة أخرى.'
+        );
+      }
 
       const assistantReply: ChatMessage = {
         id: `assistant-${Date.now()}`,
