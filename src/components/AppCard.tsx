@@ -1,16 +1,22 @@
 import { ArrowLeft, Download } from 'lucide-react';
-import { AppDefinition, RepoReleaseState } from '../types/app';
+import {
+  AppDefinition,
+  RepoReadmeState,
+  RepoReleaseState,
+} from '../types/app';
 import { AppGeometricIcon } from './AppGeometricIcon';
 
 interface AppCardProps {
   app: AppDefinition;
   releaseState: RepoReleaseState;
+  readmeState: RepoReadmeState;
   onOpenDetails: (repo: string) => void;
 }
 
 export function AppCard({
   app,
   releaseState,
+  readmeState,
   onOpenDetails,
 }: AppCardProps) {
   const { status, release } = releaseState;
@@ -49,6 +55,52 @@ export function AppCard({
           </>
         )}
       </>
+    );
+  };
+
+  const renderCardDescription = () => {
+    if (readmeState.status === 'loading') {
+      return (
+        <p className="text-sm text-slate-400">
+          جاري جلب الوصف من ملف README...
+        </p>
+      );
+    }
+
+    if (readmeState.status === 'error') {
+      return (
+        <p className="text-sm text-amber-200/90">
+          تعذر جلب ملف README من GitHub.
+        </p>
+      );
+    }
+
+    if (!readmeState.exists || readmeState.status === 'not_found' || !readmeState.readme) {
+      return (
+        <p className="text-sm sm:text-[15px] text-sky-300 font-semibold">
+          قريباً
+        </p>
+      );
+    }
+
+    const summary =
+      readmeState.readme.shortDescription || readmeState.readme.description;
+
+    if (!summary) {
+      return (
+        <p className="text-sm text-slate-400">
+          غير مذكور في README
+        </p>
+      );
+    }
+
+    return (
+      <p
+        dir="auto"
+        className="text-sm sm:text-[15px] text-slate-300 leading-relaxed"
+      >
+        {summary}
+      </p>
     );
   };
 
@@ -91,9 +143,7 @@ export function AppCard({
           </div>
         </div>
 
-        <p className="text-sm sm:text-[15px] text-slate-300 leading-relaxed">
-          {app.shortDescription}
-        </p>
+        {renderCardDescription()}
       </div>
 
       <div className="pt-4 border-t border-sky-400/15 flex flex-col sm:flex-row items-stretch gap-2.5">

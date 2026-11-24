@@ -2,10 +2,11 @@ import { AlertTriangle, RotateCw, Search, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AppCard } from '../components/AppCard';
 import { APPS_CATALOG, FILTER_CATEGORIES } from '../data/apps';
-import { FilterCategory, ReleasesMap } from '../types/app';
+import { FilterCategory, ReadmesMap, ReleasesMap } from '../types/app';
 
 interface HomePageProps {
   releases: ReleasesMap;
+  readmes: ReadmesMap;
   isAnyLoading: boolean;
   hasAnyError: boolean;
   errorBannerMessage: string | null;
@@ -15,6 +16,7 @@ interface HomePageProps {
 
 export function HomePage({
   releases,
+  readmes,
   isAnyLoading,
   hasAnyError,
   errorBannerMessage,
@@ -40,14 +42,19 @@ export function HomePage({
         return true;
       }
 
+      const readme = readmes[app.repo]?.readme;
+      const readmeText = readme
+        ? `${readme.description || ''} ${readme.features.join(' ')} ${readme.rawMarkdown}`.toLowerCase()
+        : '';
+
       return (
         app.name.toLowerCase().includes(query) ||
-        app.shortDescription.toLowerCase().includes(query) ||
-        app.fullDescription.toLowerCase().includes(query) ||
-        app.category.toLowerCase().includes(query)
+        app.repo.toLowerCase().includes(query) ||
+        app.category.toLowerCase().includes(query) ||
+        readmeText.includes(query)
       );
     });
-  }, [searchQuery, selectedCategory]);
+  }, [searchQuery, selectedCategory, readmes]);
 
   const releasedCount = useMemo(() => {
     return APPS_CATALOG.filter(
@@ -91,16 +98,13 @@ export function HomePage({
 
           <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl">
             المستودع المباشر لتحميل أحدث إصدارات APK لتطبيقات المطور أبو معاذ،
-            مع تحديث فوري لرقم الإصدار وتاريخ النشر وملاحظات التغيير مباشرة من
-            GitHub.
+            مع تحديث فوري لرقم الإصدار وتاريخ النشر وملاحظات التغيير وتفاصيل
+            ملفات README مباشرة من GitHub.
           </p>
         </div>
       </section>
 
-      <section
-        aria-label="البحث والتصفية"
-        className="space-y-4"
-      >
+      <section aria-label="البحث والتصفية" className="space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center gap-4">
           <div className="relative flex-1">
             <label htmlFor="app-search" className="sr-only">
@@ -115,7 +119,7 @@ export function HomePage({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ابحث عن تطبيق بالاسم أو الوصف..."
+              placeholder="ابحث عن تطبيق بالاسم أو محتوى README..."
               className="w-full min-h-[48px] pr-12 pl-12 py-3 rounded-xl bg-[#071127] border border-sky-400/25 text-white placeholder:text-slate-400 text-sm sm:text-base focus:border-[#00b4ff] focus:outline-none transition-colors"
             />
             {searchQuery && (
@@ -167,7 +171,7 @@ export function HomePage({
               className="w-4 h-4 text-[#00b4ff] animate-spin shrink-0"
               aria-hidden="true"
             />
-            <span>جاري جلب أحدث الإصدارات مباشرة من مستودعات GitHub...</span>
+            <span>جاري جلب أحدث الإصدارات وملفات README مباشرة من GitHub...</span>
           </div>
         )}
 
@@ -212,6 +216,15 @@ export function HomePage({
                   releases[app.repo] ?? {
                     status: 'loading',
                     release: null,
+                    errorReason: null,
+                    errorMessage: null,
+                  }
+                }
+                readmeState={
+                  readmes[app.repo] ?? {
+                    status: 'loading',
+                    exists: false,
+                    readme: null,
                     errorReason: null,
                     errorMessage: null,
                   }

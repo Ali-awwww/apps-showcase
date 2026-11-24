@@ -14,9 +14,6 @@ export interface AppDefinition {
   repo: string;
   name: string;
   category: AppCategory;
-  shortDescription: string;
-  fullDescription: string;
-  features: string[];
   iconId: AppIconId;
 }
 
@@ -58,3 +55,25 @@ export interface RepoReleaseState {
 }
 
 export type ReleasesMap = Record<string, RepoReleaseState>;
+
+export interface ParsedReadme {
+  exists: true;
+  rawMarkdown: string;
+  description: string | null;
+  shortDescription: string | null;
+  features: string[];
+  installUsageMarkdown: string | null;
+  htmlUrl: string;
+}
+
+export type ReadmeLoadStatus = 'loading' | 'ready' | 'not_found' | 'error';
+
+export interface RepoReadmeState {
+  status: ReadmeLoadStatus;
+  exists: boolean;
+  readme: ParsedReadme | null;
+  errorReason: ReleaseErrorReason | null;
+  errorMessage: string | null;
+}
+
+export type ReadmesMap = Record<string, RepoReadmeState>;

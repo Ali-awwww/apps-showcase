@@ -11,7 +11,11 @@ import {
   createInitialLoadingState,
   fetchAllRepoReleases,
 } from './services/github';
-import { ReleasesMap } from './types/app';
+import {
+  createInitialReadmeLoadingState,
+  fetchAllRepoReadmes,
+} from './services/readme';
+import { ReadmesMap, ReleasesMap } from './types/app';
 
 function parseHashRoute(): string {
   const raw = window.location.hash;
@@ -27,9 +31,12 @@ export default function App() {
   const [releases, setReleases] = useState<ReleasesMap>(() =>
     createInitialLoadingState(APPS_CATALOG)
   );
+  const [readmes, setReadmes] = useState<ReadmesMap>(() =>
+    createInitialReadmeLoadingState(APPS_CATALOG)
+  );
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const loadReleases = useCallback(async () => {
+  const loadAllData = useCallback(async () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -38,14 +45,17 @@ export default function App() {
     abortControllerRef.current = controller;
 
     setReleases(createInitialLoadingState(APPS_CATALOG));
+    setReadmes(createInitialReadmeLoadingState(APPS_CATALOG));
 
     try {
-      const results = await fetchAllRepoReleases(
-        APPS_CATALOG,
-        controller.signal
-      );
+      const [releaseResults, readmeResults] = await Promise.all([
+        fetchAllRepoReleases(APPS_CATALOG, controller.signal),
+        fetchAllRepoReadmes(APPS_CATALOG, controller.signal),
+      ]);
+
       if (!controller.signal.aborted) {
-        setReleases(results);
+        setReleases(releaseResults);
+        setReadmes(readmeResults);
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -55,11 +65,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    loadReleases();
+    loadAllData();
     return () => {
       abortControllerRef.current?.abort();
     };
-  }, [loadReleases]);
+  }, [loadAllData]);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -89,32 +99,45 @@ export default function App() {
   );
 
   const statusSummary = useMemo(() => {
-    const states = Object.values(releases);
-    const isAnyLoading = states.some((s) => s.status === 'loading');
-    const errorStates = states.filter((s) => s.status === 'error');
-    const hasAnyError = errorStates.length > 0;
-    const rateLimitError = errorStates.find(
-      (s) => s.errorReason === 'rate_limit'
-    );
+    const releaseStates = Object.values(releases);
+    const readmeStates = Object.values(readmes);
+
+    const isAnyLoading =
+      releaseStates.some((s) => s.status === 'loading') ||
+      readmeStates.some((s) => s.status === 'loading');
+
+    const releaseErrors = releaseStates.filter((s) => s.status === 'error');
+    const readmeErrors = readmeStates.filter((s) => s.status === 'error');
+    const allErrors = [...releaseErrors, ...readmeErrors];
+
+    const hasAnyError = allErrors.length > 0;
+    const rateLimitError = allErrors.find((s) => s.errorReason === 'rate_limit');
     const errorBannerMessage =
-      rateLimitError?.errorMessage ?? errorStates[0]?.errorMessage ?? null;
+      rateLimitError?.errorMessage ?? allErrors[0]?.errorMessage ?? null;
 
     return {
       isAnyLoading,
       hasAnyError,
       errorBannerMessage,
+      isReleasesLoading: releaseStates.some((s) => s.status === 'loading'),
+      hasReleaseError: releaseErrors.length > 0,
+      releaseErrorMessage:
+        releaseErrors.find((s) => s.errorReason === 'rate_limit')
+          ?.errorMessage ??
+        releaseErrors[0]?.errorMessage ??
+        null,
     };
-  }, [releases]);
+  }, [releases, readmes]);
 
   const renderPage = () => {
     if (route === '/new') {
       return (
         <WhatsNewPage
           releases={releases}
-          isAnyLoading={statusSummary.isAnyLoading}
-          hasAnyError={statusSummary.hasAnyError}
-          errorBannerMessage={statusSummary.errorBannerMessage}
-          onRetry={loadReleases}
+          isAnyLoading={statusSummary.isReleasesLoading}
+          hasAnyError={statusSummary.hasReleaseError}
+          errorBannerMessage={statusSummary.releaseErrorMessage}
+          onRetry={loadAllData}
           onOpenDetails={openDetails}
           onBackHome={() => navigate('/')}
         />
@@ -134,8 +157,9 @@ export default function App() {
         <AppDetailPage
           repo={decodedRepo}
           releases={releases}
+          readmes={readmes}
           onBackHome={() => navigate('/')}
-          onRetry={loadReleases}
+          onRetry={loadAllData}
         />
       );
     }
@@ -143,10 +167,11 @@ export default function App() {
     return (
       <HomePage
         releases={releases}
+        readmes={readmes}
         isAnyLoading={statusSummary.isAnyLoading}
         hasAnyError={statusSummary.hasAnyError}
         errorBannerMessage={statusSummary.errorBannerMessage}
-        onRetry={loadReleases}
+        onRetry={loadAllData}
         onOpenDetails={openDetails}
       />
     );
@@ -158,7 +183,7 @@ export default function App() {
       <Navbar currentPath={route} onNavigate={navigate} />
       <div className="flex-1">{renderPage()}</div>
       <Footer />
-      <GeminiChatbot releases={releases} />
+      <GeminiChatbot releases={releases} readmes={readmes} />
     </div>
   );
 }

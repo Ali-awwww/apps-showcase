@@ -37,10 +37,13 @@ interface AppContextSnapshot {
   repo: string;
   name: string;
   category: string;
-  shortDescription: string;
-  fullDescription: string;
-  features: string[];
   githubUrl: string;
+  readmeStatus: 'loading' | 'ready' | 'not_found' | 'error';
+  readmeExists: boolean;
+  readmeUrl: string | null;
+  readmeDescription: string | null;
+  readmeFeatures: string[];
+  readmeInstallUsage: string | null;
   status: 'loading' | 'ready' | 'not_found' | 'error';
   tagName: string | null;
   publishedAt: string | null;
@@ -64,10 +67,24 @@ function formatLiveAppsContext(appsContext: AppContextSnapshot[]): string {
 
   return appsContext
     .map((item, idx) => {
-      const featuresText =
-        item.features.length > 0
-          ? item.features.map((f) => `  - ${f}`).join('\n')
-          : '  - غير محددة';
+      let readmeSection = 'ملف README.md على GitHub: غير موجود (قريباً — لا تتوفر تفاصيل في المستودع بعد).';
+      if (item.readmeStatus === 'loading') {
+        readmeSection = 'ملف README.md على GitHub: جاري الجلب حالياً.';
+      } else if (item.readmeStatus === 'error') {
+        readmeSection = 'ملف README.md على GitHub: تعذر جلبه حالياً.';
+      } else if (item.readmeExists) {
+        const featuresText =
+          item.readmeFeatures.length > 0
+            ? item.readmeFeatures.map((f) => `  - ${f}`).join('\n')
+            : '  - غير مذكور في README';
+        const readmeLines = [
+          `رابط ملف README على GitHub: ${item.readmeUrl || item.githubUrl}`,
+          `الوصف من README: ${item.readmeDescription || 'غير مذكور في README'}`,
+          `المزايا من README:\n${featuresText}`,
+          `التثبيت والاستخدام من README: ${item.readmeInstallUsage || 'غير مذكور في README'}`,
+        ];
+        readmeSection = readmeLines.join('\n');
+      }
 
       let releaseSection = 'حالة الإصدار على GitHub: قريباً (لا يوجد إصدار منشور بعد).';
       if (item.status === 'loading') {
@@ -96,10 +113,8 @@ function formatLiveAppsContext(appsContext: AppContextSnapshot[]): string {
       return [
         `### ${idx + 1}. ${item.name} (${item.repo})`,
         `- التصنيف: ${item.category}`,
-        `- الوصف المختصر: ${item.shortDescription}`,
-        `- الوصف الكامل: ${item.fullDescription}`,
         `- رابط المستودع على GitHub: ${item.githubUrl}`,
-        `- المزايا العامة:\n${featuresText}`,
+        readmeSection,
         releaseSection,
       ].join('\n');
     })
@@ -113,15 +128,9 @@ function buildSystemInstruction(appsContext: AppContextSnapshot[]): string {
 مهمتك مساعدة زوار الموقع باللغة العربية الفصحى الواضحة والودودة والمختصرة.
 
 المهام المسموح لك بها:
-1. ترشيح التطبيق المناسب حسب حاجة الزائر وفق التوجيه التالي:
-   - القرآن الكريم والأذكار ومواقيت الصلاة والأدعية ← «مساعد المسلم» (muslim-assistant)
-   - التذكير بمواقيت الأذان والصلاة ← «مذكر الأذان» (adhan-reminder)
-   - السوق المحلي لأهالي قرية أبو جرين لعرض المنتجات والبيع والشراء ← «سوق قرية أبو جرين» (abu-jrin-market)
-   - المساعد الذكي لإدارة الهاتف وإنجاز المهام ← «وكيل الهاتف» (phone-agent)
-   - بيئة البرمجة بأسلوب Vibe Coding لبناء التطبيقات بالوصف ← «فيب كودينغ» (-Vibe-coding)
-   - تطبيق أدوات المطور أبو معاذ ← «AW» (-AW)
-2. شرح مزايا كل تطبيق استناداً فقط إلى الوصف والمزايا المذكورة في البيانات الحية أدناه.
-3. شرح خطوات التحميل والتثبيت لأجهزة أندرويد عند الطلب:
+1. ترشيح التطبيق المناسب حسب حاجة الزائر بالاعتماد حصرياً على اسم التطبيق وتصنيفه وما ورد في ملف README.md الخاص به في البيانات الحية أدناه.
+2. شرح وصف التطبيق ومزاياه وطريقة تثبيته واستخدامه استناداً فقط إلى ما ورد فعلياً في ملف README.md وبيانات GitHub المرفقة أدناه.
+3. شرح خطوات تحميل وتثبيت ملف APK لأجهزة أندرويد عند توفر رابط APK حقيقي:
    - الضغط على زر «تحميل APK» في بطاقة التطبيق بالصفحة الرئيسية أو في صفحة تفاصيل التطبيق (أو مسح رمز QR من صفحة التفاصيل عند توفر ملف APK).
    - بعد اكتمال التحميل، فتح ملف APK على الهاتف.
    - السماح بالتثبيت من مصادر غير معروفة / هذا المصدر إذا طلب نظام الهاتف ذلك.
@@ -130,11 +139,12 @@ function buildSystemInstruction(appsContext: AppContextSnapshot[]): string {
 
 القواعد الصارمة (يجب الالتزام بها حرفياً دون أي استثناء):
 - لا تُجِب إلا عن تطبيقات المطور أبو معاذ الستة المذكورة أدناه فقط، ولا تُجِب عن مواضيع عامة أو تطبيقات أو موضوعات خارج هذه المنصة. إذا سألك الزائر عن موضوع خارج تطبيقات المطور الستة، اعتذر بلطف ووضّح أن دورك يقتصر على مساعدة زوار منصة تطبيقات المطور أبو معاذ.
-- التزم التزاماً تاماً بالبيانات الحية المرفقة أدناه فقط. يُمنع منعاً باتاً اختراع أو تخمين أي مزايا إضافية، أو أرقام إصدارات، أو تواريخ، أو روابط، أو أسعار، أو أحجام ملفات، أو دعم العمل دون إنترنت، أو أذونات، أو لقطات شاشة، أو أي معلومة غير موجودة نصاً في البيانات أدناه.
-- إذا كان التطبيق حالته «قريباً» أو بلا إصدار منشور على GitHub، اذكر بوضوح أنه «قريباً» ولا يوجد له إصدار منشور بعد، ولا تخترع أي رقم إصدار.
+- التزم التزاماً تاماً بالبيانات الحية المرفقة أدناه فقط. يُمنع منعاً باتاً اختراع أو تخمين أي مزايا إضافية، أو أوصاف، أو أرقام إصدارات، أو تواريخ، أو روابط، أو أسعار، أو أحجام ملفات، أو دعم العمل دون إنترنت، أو أذونات، أو لقطات شاشة، أو أي معلومة غير موجودة نصاً في البيانات أدناه.
+- إذا كان التطبيق بلا ملف README (مثال: «فيب كودينغ» -Vibe-coding) أو بلا إصدار منشور على GitHub، اذكر بوضوح أنه «قريباً» ولا تخترع له أي وصف أو مزايا أو رقم إصدار.
+- إذا كان أحد الأقسام في README (مثل المزايا أو التثبيت والاستخدام) «غير مذكور في README»، أخبر الزائر بذلك صراحة ولا تخترع له محتوى.
 - إذا سألك الزائر عن معلومة غير موجودة في البيانات المرفقة (مثل: هل التطبيقات مجانية أم مدفوعة؟ أو هل تعمل دون إنترنت؟ أو متى موعد صدور تطبيق حالته قريباً؟ أو تفاصيل تقنية غير مذكورة)، قل بصراحة: «لا أعرف، لا توجد معلومات عن ذلك في بيانات المنصة ومستودعات GitHub الحالية» واقترح عليه مراجعة صفحة التطبيق داخل المنصة أو زيارة مستودع التطبيق على GitHub.
 
-البيانات الحية الحالية للتطبيقات الستة (من src/data/apps.ts و GitHub API):
+البيانات الحية الحالية للتطبيقات الستة (من ملفات README.md و GitHub Releases API):
 ${liveDataBlock}`;
 }
 
@@ -299,10 +309,19 @@ async function startServer() {
             ? statusRaw
             : 'not_found';
 
-        const features = Array.isArray(c.features)
-          ? c.features
-              .slice(0, 10)
-              .map((f) => sanitizeText(f, 250))
+        const readmeStatusRaw = c.readmeStatus;
+        const readmeStatus: AppContextSnapshot['readmeStatus'] =
+          readmeStatusRaw === 'ready' ||
+          readmeStatusRaw === 'not_found' ||
+          readmeStatusRaw === 'loading' ||
+          readmeStatusRaw === 'error'
+            ? readmeStatusRaw
+            : 'not_found';
+
+        const readmeFeatures = Array.isArray(c.readmeFeatures)
+          ? c.readmeFeatures
+              .slice(0, 20)
+              .map((f) => sanitizeText(f, 300))
               .filter(Boolean)
           : [];
 
@@ -310,10 +329,20 @@ async function startServer() {
           repo,
           name: sanitizeText(c.name, 120),
           category: sanitizeText(c.category, 60),
-          shortDescription: sanitizeText(c.shortDescription, 400),
-          fullDescription: sanitizeText(c.fullDescription, 1000),
-          features,
           githubUrl: `https://github.com/Ali-awwww/${repo}`,
+          readmeStatus,
+          readmeExists: Boolean(c.readmeExists),
+          readmeUrl:
+            typeof c.readmeUrl === 'string' && c.readmeUrl.startsWith('https://')
+              ? c.readmeUrl.slice(0, 500)
+              : null,
+          readmeDescription: c.readmeDescription
+            ? sanitizeText(c.readmeDescription, 1200)
+            : null,
+          readmeFeatures,
+          readmeInstallUsage: c.readmeInstallUsage
+            ? sanitizeText(c.readmeInstallUsage, 2500)
+            : null,
           status,
           tagName: c.tagName ? sanitizeText(c.tagName, 100) : null,
           publishedAt: c.publishedAt ? sanitizeText(c.publishedAt, 80) : null,

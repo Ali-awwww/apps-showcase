@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { buildAppsContextPayload } from '../services/chatContext';
-import { ReleasesMap } from '../types/app';
+import { ReadmesMap, ReleasesMap } from '../types/app';
 
 interface ChatMessage {
   id: string;
@@ -18,6 +18,7 @@ interface ChatMessage {
 
 interface GeminiChatbotProps {
   releases: ReleasesMap;
+  readmes: ReadmesMap;
 }
 
 const WELCOME_MESSAGE: ChatMessage = {
@@ -26,7 +27,7 @@ const WELCOME_MESSAGE: ChatMessage = {
   text:
     'أهلاً بك في منصة عرض تطبيقات المطور أبو معاذ!\n' +
     'تضم المنصة 6 تطبيقات: «مساعد المسلم»، «مذكر الأذان»، «سوق قرية أبو جرين»، «وكيل الهاتف»، «فيب كودينغ»، و«AW».\n' +
-    'أخبرني بما تبحث عنه لأرشّح لك التطبيق المناسب، أو اسألني عن آخر الإصدارات وخطوات التحميل والتثبيت.',
+    'أخبرني بما تبحث عنه لأرشّح لك التطبيق المناسب من بيانات GitHub وملفات README الحية، أو اسألني عن آخر الإصدارات وخطوات التحميل.',
 };
 
 const QUICK_SUGGESTIONS = [
@@ -36,7 +37,7 @@ const QUICK_SUGGESTIONS = [
   'هل التطبيقات مجانية؟',
 ];
 
-export function GeminiChatbot({ releases }: GeminiChatbotProps) {
+export function GeminiChatbot({ releases, readmes }: GeminiChatbotProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME_MESSAGE]);
   const [inputValue, setInputValue] = useState('');
@@ -50,8 +51,8 @@ export function GeminiChatbot({ releases }: GeminiChatbotProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const appsContext = useMemo(
-    () => buildAppsContextPayload(releases),
-    [releases]
+    () => buildAppsContextPayload(releases, readmes),
+    [releases, readmes]
   );
 
   useEffect(() => {

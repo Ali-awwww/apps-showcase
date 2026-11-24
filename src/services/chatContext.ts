@@ -1,14 +1,17 @@
 import { APPS_CATALOG, getRepoGithubUrl } from '../data/apps';
-import { ReleasesMap } from '../types/app';
+import { ReadmesMap, ReleasesMap } from '../types/app';
 
 export interface AppContextPayload {
   repo: string;
   name: string;
   category: string;
-  shortDescription: string;
-  fullDescription: string;
-  features: string[];
   githubUrl: string;
+  readmeStatus: 'loading' | 'ready' | 'not_found' | 'error';
+  readmeExists: boolean;
+  readmeUrl: string | null;
+  readmeDescription: string | null;
+  readmeFeatures: string[];
+  readmeInstallUsage: string | null;
   status: 'loading' | 'ready' | 'not_found' | 'error';
   tagName: string | null;
   publishedAt: string | null;
@@ -19,21 +22,28 @@ export interface AppContextPayload {
 }
 
 export function buildAppsContextPayload(
-  releases: ReleasesMap
+  releases: ReleasesMap,
+  readmes: ReadmesMap
 ): AppContextPayload[] {
   return APPS_CATALOG.map((app) => {
-    const state = releases[app.repo];
-    const release = state?.release ?? null;
+    const releaseState = releases[app.repo];
+    const release = releaseState?.release ?? null;
+
+    const readmeState = readmes[app.repo];
+    const readme = readmeState?.readme ?? null;
 
     return {
       repo: app.repo,
       name: app.name,
       category: app.category,
-      shortDescription: app.shortDescription,
-      fullDescription: app.fullDescription,
-      features: app.features,
       githubUrl: getRepoGithubUrl(app.repo),
-      status: state?.status ?? 'loading',
+      readmeStatus: readmeState?.status ?? 'loading',
+      readmeExists: Boolean(readmeState?.exists && readme),
+      readmeUrl: readme?.htmlUrl ?? null,
+      readmeDescription: readme?.description ?? null,
+      readmeFeatures: readme?.features ?? [],
+      readmeInstallUsage: readme?.installUsageMarkdown ?? null,
+      status: releaseState?.status ?? 'loading',
       tagName: release?.tagName ?? null,
       publishedAt: release?.publishedAt ?? null,
       formattedDate: release?.formattedDate ?? null,
