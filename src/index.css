@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-void: #030712;
+    --bg-surface: #071024;
+    --bg-surface-elevated: #0b1733;
+    --border-grid: rgba(56, 189, 248, 0.16);
+    --border-grid-strong: rgba(0, 180, 255, 0.42);
+    --accent-electric: #00b4ff;
+    --accent-cyan: #38bdf8;
+    --accent-cobalt: #2563eb;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --font-display: "Cairo", "IBM Plex Sans Arabic", sans-serif;
+    --font-body: "IBM Plex Sans Arabic", "Cairo", sans-serif;
+    --font-mono: "JetBrains Mono", monospace;
+  }
+
+  html {
+    font-family: var(--font-body);
+    background-color: var(--bg-void);
+    color: var(--text-primary);
+    scroll-behavior: smooth;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-mono-tabular {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--accent-electric);
+    outline-offset: 2px;
+  }
+}
+
+.cyber-grid-bg {
+  background-image:
+    linear-gradient(to right, rgba(0, 180, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 180, 255, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.cyber-grid-fine {
+  background-image:
+    linear-gradient(to right, rgba(56, 189, 248, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(56, 189, 248, 0.035) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+.cyber-card {
+  background: linear-gradient(160deg, rgba(11, 23, 51, 0.92) 0%, rgba(6, 13, 30, 0.96) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), border-color 180ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cyber-card:hover {
+  border-color: rgba(0, 180, 255, 0.52);
+  box-shadow: 0 0 28px -8px rgba(0, 180, 255, 0.28);
+}
+
+.cyber-btn-primary {
+  background: linear-gradient(135deg, #0284c7 0%, #00b4ff 100%);
+  color: #020617;
+  box-shadow: 0 0 22px -4px rgba(0, 180, 255, 0.5);
+  transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1), filter 160ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cyber-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: 0 0 28px -2px rgba(0, 180, 255, 0.68);
+}
+
+.cyber-btn-primary:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.cyber-glow-line {
+  background: linear-gradient(90deg, transparent 0%, rgba(0, 180, 255, 0.7) 50%, transparent 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

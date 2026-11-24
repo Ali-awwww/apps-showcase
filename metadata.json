@@ -1,0 +1,8 @@
+{
+  "name": "منصة عرض تطبيقات المطور أبو معاذ",
+  "description": "المنصة الرسمية لعرض وتحميل تطبيقات المطور أبو معاذ مباشرة من مستودعات GitHub العامة.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
