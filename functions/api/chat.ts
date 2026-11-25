@@ -7,8 +7,9 @@ const MODEL_FALLBACK_CHAIN = [
 ] as const;
 
 // Daily per-visitor question quota, enforced with the same KV namespace
-// as the visitor counter (binding VISITS_KV). Fail-open: if KV or the
-// client IP is unavailable, the question is answered without counting.
+// as the visitor counter (binding VISITS_KV). IPv6 visitors are counted
+// per /64 prefix (see normalizeClientIp). Fail-open: if KV or the client
+// IP is unavailable, the question is answered without counting.
 const DAILY_QUESTIONS_PER_VISITOR = 20;
 const RATE_LIMIT_TTL_SECONDS = 24 * 60 * 60;
 
@@ -28,6 +29,23 @@ function getClientIp(request: Request | undefined): string {
   return '';
 }
 
+function normalizeClientIp(ip: string): string {
+  const trimmed = ip.trim();
+  if (!trimmed.includes(':')) {
+    return trimmed; // IPv4: count per address.
+  }
+  // IPv6: count per /64 network prefix (first 4 groups). One visitor's
+  // privacy-extension addresses rotate within the same /64, while different
+  // visitors are (almost always) on different /64s — so per-address
+  // counting would never trigger for IPv6 visitors.
+  const head = trimmed.split('::')[0] ?? '';
+  const groups = head.split(':').filter((g) => g.length > 0);
+  if (groups.length >= 4) {
+    return `${groups.slice(0, 4).join(':')}::/64`;
+  }
+  return trimmed;
+}
+
 async function checkDailyQuestionQuota(
   kv: any,
   request: Request | undefined
@@ -41,7 +59,7 @@ async function checkDailyQuestionQuota(
       return { allowed: true };
     }
     const today = new Date().toISOString().slice(0, 10);
-    const key = `rate:${ip}:${today}`;
+    const key = `rate:${normalizeClientIp(ip)}:${today}`;
     const stored = await kv.get(key);
     const used = stored ? parseInt(stored, 10) || 0 : 0;
     if (used >= DAILY_QUESTIONS_PER_VISITOR) {
