@@ -13,6 +13,7 @@ import { AppDefinition, ParsedRelease, ReleasesMap } from '../types/app';
 
 interface WhatsNewPageProps {
   releases: ReleasesMap;
+  latestAgeText?: string | null;
   isAnyLoading: boolean;
   hasAnyError: boolean;
   errorBannerMessage: string | null;
@@ -28,6 +29,7 @@ interface ReleasedAppEntry {
 
 export function WhatsNewPage({
   releases,
+  latestAgeText,
   isAnyLoading,
   hasAnyError,
   errorBannerMessage,
@@ -63,6 +65,9 @@ export function WhatsNewPage({
             جميع التطبيقات التي لها إصدار منشور على GitHub، مرتبة من الأحدث إلى
             الأقدم.
           </p>
+          {latestAgeText && (
+            <p className="text-xs sm:text-sm text-sky-300/85">{latestAgeText}</p>
+          )}
         </div>
 
         <button

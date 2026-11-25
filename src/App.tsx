@@ -12,6 +12,10 @@ import {
   fetchAllRepoReleases,
 } from './services/github';
 import {
+  fetchServerLatest,
+  mergeServerLatestIntoReleases,
+} from './services/latest';
+import {
   createInitialReadmeLoadingState,
   fetchAllRepoReadmes,
 } from './services/readme';
@@ -34,6 +38,9 @@ export default function App() {
   const [readmes, setReadmes] = useState<ReadmesMap>(() =>
     createInitialReadmeLoadingState(APPS_CATALOG)
   );
+  // Freshness of the server-side latest data (GET /api/latest), shown on
+  // the "ما الجديد" page; null on the static copy (no Functions endpoint).
+  const [latestAgeText, setLatestAgeText] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const loadAllData = useCallback(async () => {
@@ -48,14 +55,23 @@ export default function App() {
     setReadmes(createInitialReadmeLoadingState(APPS_CATALOG));
 
     try {
-      const [releaseResults, readmeResults] = await Promise.all([
-        fetchAllRepoReleases(APPS_CATALOG, controller.signal),
-        fetchAllRepoReadmes(APPS_CATALOG, controller.signal),
-      ]);
+      const [releaseResults, readmeResults, serverLatest] =
+        await Promise.all([
+          fetchAllRepoReleases(APPS_CATALOG, controller.signal),
+          fetchAllRepoReadmes(APPS_CATALOG, controller.signal),
+          fetchServerLatest(controller.signal),
+        ]);
 
       if (!controller.signal.aborted) {
-        setReleases(releaseResults);
+        // Server data (GET /api/latest) is the same source the assistant
+        // answers from; fall back to the client-side GitHub fetch when the
+        // endpoint is unavailable (static GitHub Pages copy).
+        const releases = serverLatest
+          ? mergeServerLatestIntoReleases(releaseResults, serverLatest)
+          : releaseResults;
+        setReleases(releases);
         setReadmes(readmeResults);
+        setLatestAgeText(serverLatest?.ageText ?? null);
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -134,6 +150,7 @@ export default function App() {
       return (
         <WhatsNewPage
           releases={releases}
+          latestAgeText={latestAgeText}
           isAnyLoading={statusSummary.isReleasesLoading}
           hasAnyError={statusSummary.hasReleaseError}
           errorBannerMessage={statusSummary.releaseErrorMessage}

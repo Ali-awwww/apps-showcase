@@ -1,3 +1,10 @@
+import {
+  buildLatestFactsBlock,
+  buildLatestJsonTable,
+  getLatestReleases,
+  type LatestSnapshot,
+} from './_lib/latest';
+
 const MODEL_FALLBACK_CHAIN = [
   'gemini-2.5-flash-lite',
   'gemini-3.5-flash-lite',
@@ -137,72 +144,108 @@ function sanitizeText(value: unknown, maxLen: number): string {
   return value.trim().slice(0, maxLen);
 }
 
-function formatLiveAppsContext(appsContext: AppContextSnapshot[]): string {
+// Compact JSON table of the six apps: README details (sent by the client)
+// merged with the server-side release facts (computed in _lib/latest.ts).
+// Structured data — not prose — so the model cannot garble numbers, dates
+// or times. Release fields always come from the server when available;
+// the client values are used only when the server could not fetch GitHub
+// at all (snapshot source "empty").
+function formatAppsContextJson(
+  appsContext: AppContextSnapshot[],
+  latest: LatestSnapshot
+): string {
   if (appsContext.length === 0) {
-    return 'لا تتوفر بيانات تطبيقات مرسلة حالياً.';
+    return '[]';
   }
 
-  return appsContext
-    .map((item, idx) => {
-      let readmeSection =
-        'ملف README.md على GitHub: غير موجود (قريباً — لا تتوفر تفاصيل في المستودع بعد).';
-      if (item.readmeStatus === 'loading') {
-        readmeSection = 'ملف README.md على GitHub: جاري الجلب حالياً.';
-      } else if (item.readmeStatus === 'error') {
-        readmeSection = 'ملف README.md على GitHub: تعذر جلبه حالياً.';
-      } else if (item.readmeExists) {
-        const featuresText =
-          item.readmeFeatures.length > 0
-            ? item.readmeFeatures.map((f) => `  - ${f}`).join('\n')
-            : '  - غير مذكور في README';
-        const readmeLines = [
-          `رابط ملف README على GitHub: ${item.readmeUrl || item.githubUrl}`,
-          `الوصف من README: ${item.readmeDescription || 'غير مذكور في README'}`,
-          `المزايا من README:\n${featuresText}`,
-          `التثبيت والاستخدام من README: ${item.readmeInstallUsage || 'غير مذكور في README'}`,
-        ];
-        readmeSection = readmeLines.join('\n');
-      }
+  const serverByRepo = new Map(latest.items.map((item) => [item.repo, item]));
+  const serverUsable = latest.source !== 'empty';
 
-      let releaseSection =
-        'حالة الإصدار على GitHub: قريباً (لا يوجد إصدار منشور بعد).';
-      if (item.status === 'loading') {
-        releaseSection = 'حالة الإصدار على GitHub: جاري الجلب حالياً.';
-      } else if (item.status === 'error') {
-        releaseSection =
-          'حالة الإصدار على GitHub: تعذر جلب بيانات الإصدار حالياً من GitHub.';
-      } else if (item.status === 'ready' && item.tagName) {
-        const lines = [
-          `رقم الإصدار (tag_name): ${item.tagName}`,
-          item.formattedDate
-            ? `تاريخ النشر: ${item.formattedDate} (${item.publishedAt || ''})`
-            : item.publishedAt
-            ? `تاريخ النشر: ${item.publishedAt}`
-            : 'تاريخ النشر: غير محدد',
-          `شارة جديد (خلال آخر 7 أيام): ${item.isNew ? 'نعم' : 'لا'}`,
-          item.apkUrl
-            ? `رابط تحميل APK المباشر: ${item.apkUrl}`
-            : 'رابط تحميل APK المباشر: غير مرفق في هذا الإصدار (حالة الزر: قريباً)',
-          item.releaseBody
-            ? `ملاحظات التغيير من GitHub:\n${item.releaseBody}`
-            : 'ملاحظات التغيير من GitHub: لا توجد ملاحظات تغيير مرفقة.',
-        ];
-        releaseSection = lines.join('\n');
-      }
+  const rows = appsContext.map((item) => {
+    const server = serverByRepo.get(item.repo);
+    const useServer = serverUsable && server !== undefined;
 
-      return [
-        `### ${idx + 1}. ${item.name} (${item.repo})`,
-        `- التصنيف: ${item.category}`,
-        `- رابط المستودع على GitHub: ${item.githubUrl}`,
-        readmeSection,
-        releaseSection,
-      ].join('\n');
-    })
-    .join('\n\n');
+    const readmeDescription =
+      item.readmeStatus === 'ready' && item.readmeExists
+        ? item.readmeDescription || 'غير مذكور في README'
+        : item.readmeStatus === 'loading'
+        ? 'جاري الجلب حالياً'
+        : item.readmeStatus === 'error'
+        ? 'تعذّر جلبه حالياً'
+        : 'لا يوجد README — قريباً';
+
+    let releaseTag: string;
+    let releaseDate: string;
+    let releaseAgo: string;
+    let releaseApk: string;
+    let releaseNotes: string;
+    let releaseIsNew: boolean;
+    if (useServer && server.hasRelease) {
+      releaseTag = server.tag ?? 'قريباً';
+      releaseDate = server.damascus ?? '—';
+      releaseAgo = server.relative ?? '—';
+      releaseApk = server.apkUrl ?? 'غير مرفق';
+      releaseNotes = server.body ?? 'لا توجد ملاحظات تغيير مرفقة';
+      releaseIsNew = server.isNew;
+    } else if (useServer) {
+      releaseTag = 'قريباً (لا يوجد إصدار)';
+      releaseDate = '—';
+      releaseAgo = '—';
+      releaseApk = 'غير مرفق';
+      releaseNotes = 'لا توجد ملاحظات تغيير مرفقة';
+      releaseIsNew = false;
+    } else if (item.status === 'ready' && item.tagName) {
+      releaseTag = item.tagName;
+      releaseDate = item.formattedDate || item.publishedAt || 'غير محدد';
+      releaseAgo = '—';
+      releaseApk = item.apkUrl ?? 'غير مرفق';
+      releaseNotes = item.releaseBody ?? 'لا توجد ملاحظات تغيير مرفقة';
+      releaseIsNew = item.isNew;
+    } else {
+      releaseTag =
+        item.status === 'loading'
+          ? 'جاري الجلب حالياً'
+          : item.status === 'error'
+          ? 'تعذّر جلبه حالياً'
+          : 'قريباً (لا يوجد إصدار)';
+      releaseDate = '—';
+      releaseAgo = '—';
+      releaseApk = 'غير مرفق';
+      releaseNotes = 'لا توجد ملاحظات تغيير مرفقة';
+      releaseIsNew = false;
+    }
+
+    return {
+      التطبيق: item.name,
+      المستودع: item.repo,
+      التصنيف: item.category,
+      'رابط المستودع': item.githubUrl,
+      'الوصف من README': readmeDescription,
+      'المزايا من README':
+        item.readmeFeatures.length > 0
+          ? item.readmeFeatures
+          : 'غير مذكور في README',
+      'التثبيت والاستخدام من README':
+        item.readmeInstallUsage || 'غير مذكور في README',
+      الإصدار: releaseTag,
+      'تاريخ النشر بتوقيت دمشق': releaseDate,
+      منذ: releaseAgo,
+      جديد: releaseIsNew,
+      'رابط APK': releaseApk,
+      'ملاحظات التغيير': releaseNotes,
+    };
+  });
+
+  return JSON.stringify(rows);
 }
 
-function buildSystemInstruction(appsContext: AppContextSnapshot[]): string {
-  const liveDataBlock = formatLiveAppsContext(appsContext);
+function buildSystemInstruction(
+  appsContext: AppContextSnapshot[],
+  latest: LatestSnapshot
+): string {
+  const appsJsonTable = formatAppsContextJson(appsContext, latest);
+  const latestFactsBlock = buildLatestFactsBlock(latest);
+  const latestJsonTable = buildLatestJsonTable(latest);
 
   return `اسمك «معاذ»، وأنت المساعد الرسمي لزوار «منصة عرض تطبيقات المطور أبو معاذ» (حساب GitHub: Ali-awwww).
 مهمتك مساعدة زوار الموقع باللغة العربية الفصحى الواضحة والودودة والمختصرة.
@@ -213,7 +256,7 @@ function buildSystemInstruction(appsContext: AppContextSnapshot[]): string {
 - أقسام الموقع: «التطبيقات» (الصفحة الرئيسية: بطاقات التطبيقات الستة)، «ما الجديد» (صفحة تعرض التطبيقات التي لها إصدار منشور على GitHub مرتبة من الأحدث إلى الأقدم)، وصفحة تفاصيل كل تطبيق (الوصف والمزايا وخطوات التثبيت وزر تحميل APK ورمز QR للتحميل).
 - عداد الزوار: عداد إلكتروني حديث تحت اسم المنصة في أعلى الصفحة يعرض إجمالي عدد زيارات الموقع، ويزيد مرة واحدة لكل جلسة متصفح.
 - أنت تعمل داخل زر «اسأل المساعد» في الموقع، وتظهر نسخة الموقع على Cloudflare Pages (وهي النسخة الكاملة التي يعمل فيها المساعد).
-- أحدث التحديثات: هي أحدث الإصدارات المنشورة على GitHub للتطبيقات الستة، وتظهر مرتبة من الأحدث في صفحة «ما الجديد» وفي البيانات الحية أدناه (تاريخ النشر ورقم الإصدار).
+- أحدث التحديثات: هي أحدث الإصدارات المنشورة على GitHub للتطبيقات الستة، وتظهر مرتبة من الأحدث في صفحة «ما الجديد» وفي قسم «أحدث الإصدارات — محسوبة من الخادم» أدناه (الترتيب والتواريخ محسوبة مسبقاً من الخادم بتوقيت دمشق).
 
 المهام المسموح لك بها:
 1. ترشيح التطبيق المناسب حسب حاجة الزائر بالاعتماد حصرياً على اسم التطبيق وتصنيفه وما ورد في ملف README.md الخاص به في البيانات الحية أدناه.
@@ -227,15 +270,22 @@ function buildSystemInstruction(appsContext: AppContextSnapshot[]): string {
 5. الإجابة عن أسئلة الزوار حول المنصة نفسها وأقسامها وآخر تحديثاتها وعداد الزوار بالاعتماد على معلومات المنصة أعلاه والبيانات الحية أدناه.
 
 القواعد الصارمة (يجب الالتزام بها حرفياً دون أي استثناء):
-- إذا سألك الزائر عن اسمك، عرّف بنفسك بأنك «معاذ»، المساعد الرسمي لمنصة عرض تطبيقات المطور أبو معاذ.
+- قاعدة التعريف بنفسك: اسمك «معاذ» ويظهر أصلاً في ترويسة نافذة المحادثة. عرّف بنفسك بجملة «أنا معاذ، المساعد الرسمي لمنصة عرض تطبيقات المطور أبو معاذ» فقط في أول رد على أول رسالة في المحادثة (عندما لا توجد رسائل سابقة)، أو إذا سألك الزائر عن اسمك صراحة. في كل الردود الأخرى ابدأ بالإجابة مباشرة دون أي جملة تعريف بالنفس ودون أي مقدمة مثل «أهلاً بك! أنا معاذ» أو «أنا معاذ، المساعد الرسمي…».
+- قاعدة الأحدث والتواريخ: قسم «أحدث الإصدارات — محسوبة من الخادم» أدناه جاهز ونهائي — الترتيب والأوقات محسوبة مسبقاً من الخادم بتوقيت دمشق (+03). عند سؤالك عن أحدث إصدار أو عن ترتيب التطبيقات أو عن الساعات والتواريخ، انسخ الترتيب والتواريخ منه حرفياً كما هي، ولا تعيد الترتيب بنفسك ولا تحوّل أي توقيت ولا تحسب أي فرق زمني بنفسك، ولا تستخدم تواريخ UTC أبداً في إجاباتك.
 - لا تُجِب إلا عن تطبيقات المطور أبو معاذ الستة المذكورة أدناه فقط، ولا تُجِب عن مواضيع عامة أو تطبيقات أو موضوعات خارج هذه المنصة. إذا سألك الزائر عن موضوع خارج تطبيقات المطور الستة، اعتذر بلطف ووضّح أن دورك يقتصر على مساعدة زوار منصة تطبيقات المطور أبو معاذ.
 - التزم التزاماً تاماً بالبيانات الحية المرفقة أدناه فقط. يُمنع منعاً باتاً اختراع أو تخمين أي مزايا إضافية، أو أوصاف، أو أرقام إصدارات، أو تواريخ، أو روابط، أو أسعار، أو أحجام ملفات، أو دعم العمل دون إنترنت، أو أذونات، أو لقطات شاشة، أو أي معلومة غير موجودة نصاً في البيانات أدناه.
 - إذا كان التطبيق بلا ملف README (مثال: «فيب كودينغ» -Vibe-coding) أو بلا إصدار منشور على GitHub، اذكر بوضوح أنه «قريباً» ولا تخترع له أي وصف أو مزايا أو رقم إصدار.
 - إذا كان أحد الأقسام في README (مثل المزايا أو التثبيت والاستخدام) «غير مذكور في README»، أخبر الزائر بذلك صراحة ولا تخترع له محتوى.
 - إذا سألك الزائر عن معلومة غير موجودة في البيانات المرفقة (مثل: هل التطبيقات مجانية أم مدفوعة؟ أو هل تعمل دون إنترنت؟ أو متى موعد صدور تطبيق حالته قريباً؟ أو تفاصيل تقنية غير مذكورة)، قل بصراحة: «لا أعرف، لا توجد معلومات عن ذلك في بيانات المنصة ومستودعات GitHub الحالية» واقترح عليه مراجعة صفحة التطبيق داخل المنصة أو زيارة مستودع التطبيق على GitHub.
 
-البيانات الحية الحالية للتطبيقات الستة (من ملفات README.md و GitHub Releases API):
-${liveDataBlock}`;
+أحدث الإصدارات — محسوبة من الخادم (انسخ منها حرفياً عند السؤال عن الأحدث أو الترتيب أو الساعات):
+${latestFactsBlock}
+
+جدول الإصدارات (بيانات منظمة، جميع الأوقات بتوقيت دمشق):
+${latestJsonTable}
+
+بيانات التطبيقات الستة (جدول JSON: تفاصيل README.md من المتصفح + حقائق الإصدارات من الخادم):
+${appsJsonTable}`;
 }
 
 function extractErrorDetails(err: unknown): {
@@ -550,7 +600,15 @@ export async function onRequestPost(context: any): Promise<Response> {
     );
   }
 
-  const systemInstruction = buildSystemInstruction(sanitizedContext);
+  // Server-side latest facts (fetched, sorted, Damascus times — the model
+  // only copies them, never computes). Fail-open: on total GitHub failure
+  // the snapshot is "empty" and the client-sent context is used instead.
+  const latestSnapshot = await getLatestReleases(context?.env);
+
+  const systemInstruction = buildSystemInstruction(
+    sanitizedContext,
+    latestSnapshot
+  );
 
   try {
     const activeModels: string[] = [...MODEL_FALLBACK_CHAIN];
