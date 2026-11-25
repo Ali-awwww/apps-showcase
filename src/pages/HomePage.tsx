@@ -30,7 +30,7 @@ export function HomePage({
   const filteredApps = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
-    return APPS_CATALOG.filter((app) => {
+    const filtered = APPS_CATALOG.filter((app) => {
       const matchesCategory =
         selectedCategory === 'الكل' || app.category === selectedCategory;
 
@@ -54,7 +54,38 @@ export function HomePage({
         readmeText.includes(query)
       );
     });
-  }, [searchQuery, selectedCategory, readmes]);
+
+    // Sort by latest release first, once the GitHub fetch has finished.
+    // Apps with a published release come first (newest first); apps with
+    // no release yet («قريباً») or a failed fetch keep their catalog order
+    // at the end, so nothing disappears or breaks the page. The «جديد»
+    // badge logic is untouched.
+    if (isAnyLoading) {
+      return filtered;
+    }
+    const publishedMs = (repo: string): number | null => {
+      const state = releases[repo];
+      if (state?.status !== 'ready') {
+        return null;
+      }
+      const ms = Date.parse(state.release?.publishedAt ?? '');
+      return Number.isFinite(ms) ? ms : null;
+    };
+    return [...filtered].sort((a, b) => {
+      const da = publishedMs(a.repo);
+      const db = publishedMs(b.repo);
+      if (da !== null && db !== null) {
+        return db - da;
+      }
+      if (da !== null) {
+        return -1;
+      }
+      if (db !== null) {
+        return 1;
+      }
+      return 0;
+    });
+  }, [searchQuery, selectedCategory, readmes, releases, isAnyLoading]);
 
   const releasedCount = useMemo(() => {
     return APPS_CATALOG.filter(
