@@ -25,7 +25,7 @@ const WELCOME_MESSAGE: ChatMessage = {
   id: 'welcome',
   role: 'assistant',
   text:
-    'أهلاً بك في منصة عرض تطبيقات المطور أبو معاذ!\n' +
+    'أهلاً بك! أنا معاذ، المساعد الرسمي لمنصة عرض تطبيقات المطور أبو معاذ.\n' +
     'تضم المنصة 6 تطبيقات: «مساعد المسلم»، «مذكر الأذان»، «سوق قرية أبو جرين»، «وكيل الهاتف»، «فيب كودينغ»، و«AW».\n' +
     'أخبرني بما تبحث عنه لأرشّح لك التطبيق المناسب من بيانات GitHub وملفات README الحية، أو اسألني عن آخر الإصدارات وخطوات التحميل.',
 };
@@ -187,7 +187,7 @@ export function GeminiChatbot({ releases, readmes }: GeminiChatbotProps) {
       {isOpen && (
         <section
           role="dialog"
-          aria-label="مساعد منصة عرض تطبيقات المطور أبو معاذ"
+          aria-label="معاذ — مساعد منصة عرض تطبيقات المطور أبو معاذ"
           dir="rtl"
           className="fixed bottom-3 left-3 right-3 sm:right-auto sm:bottom-4 sm:left-4 z-50 sm:w-[420px] h-[min(82vh,620px)] flex flex-col rounded-2xl border border-sky-400/40 bg-[#050d20]/98 shadow-[0_12px_48px_-8px_rgba(0,180,255,0.4)] overflow-hidden backdrop-blur-md"
         >
@@ -206,10 +206,10 @@ export function GeminiChatbot({ releases, readmes }: GeminiChatbotProps) {
               </div>
               <div className="min-w-0">
                 <h2 className="font-display text-sm sm:text-base font-bold text-white truncate">
-                  مساعد منصة أبو معاذ
+                  معاذ
                 </h2>
                 <p className="text-[11px] text-sky-300/85 truncate">
-                  إرشاد التطبيقات والإصدارات الحية
+                  مساعد منصة أبو معاذ — إرشاد التطبيقات والإصدارات الحية
                 </p>
               </div>
             </div>
