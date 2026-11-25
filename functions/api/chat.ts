@@ -1,10 +1,61 @@
 const MODEL_FALLBACK_CHAIN = [
+  'gemini-2.5-flash-lite',
+  'gemini-3.5-flash-lite',
   'gemini-2.5-flash',
   'gemini-2.0-flash',
-  'gemini-2.5-flash-lite',
   'gemini-3.8-flash',
-  'gemini-3.5-flash-lite',
 ] as const;
+
+// Daily per-visitor question quota, enforced with the same KV namespace
+// as the visitor counter (binding VISITS_KV). Fail-open: if KV or the
+// client IP is unavailable, the question is answered without counting.
+const DAILY_QUESTIONS_PER_VISITOR = 20;
+const RATE_LIMIT_TTL_SECONDS = 24 * 60 * 60;
+
+function getClientIp(request: Request | undefined): string {
+  const headers = request?.headers;
+  if (!headers) {
+    return '';
+  }
+  const direct = (headers.get('cf-connecting-ip') || '').trim();
+  if (direct) {
+    return direct;
+  }
+  const forwarded = (headers.get('x-forwarded-for') || '').trim();
+  if (forwarded) {
+    return forwarded.split(',')[0]?.trim() ?? '';
+  }
+  return '';
+}
+
+async function checkDailyQuestionQuota(
+  kv: any,
+  request: Request | undefined
+): Promise<{ allowed: boolean }> {
+  try {
+    if (!kv || typeof kv.get !== 'function' || typeof kv.put !== 'function') {
+      return { allowed: true };
+    }
+    const ip = getClientIp(request);
+    if (!ip) {
+      return { allowed: true };
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const key = `rate:${ip}:${today}`;
+    const stored = await kv.get(key);
+    const used = stored ? parseInt(stored, 10) || 0 : 0;
+    if (used >= DAILY_QUESTIONS_PER_VISITOR) {
+      return { allowed: false };
+    }
+    await kv.put(key, String(used + 1), {
+      expirationTtl: RATE_LIMIT_TTL_SECONDS,
+    });
+    return { allowed: true };
+  } catch (err) {
+    console.warn('[Gemini Chat] Rate-limit check failed, failing open:', err);
+    return { allowed: true };
+  }
+}
 
 const RETRY_DELAYS_MS = [1000, 2000, 4000] as const;
 const FETCH_TIMEOUT_MS = 20000;
@@ -270,6 +321,11 @@ async function generateChatReplyRest(
       systemInstruction: {
         parts: [{ text: systemInstruction }],
       },
+      generationConfig: {
+        // Short, focused answers: keeps replies useful and protects the
+        // shared Gemini quota from long generations.
+        maxOutputTokens: 600,
+      },
       contents,
     }),
   });
@@ -457,6 +513,24 @@ export async function onRequestPost(context: any): Promise<Response> {
       };
     })
     .filter((item): item is AppContextSnapshot => item !== null);
+
+  // Daily per-visitor quota (20 questions/day/IP, counted in KV). Over the
+  // limit, answer with a polite message as a normal reply — not an error —
+  // so the chat UI keeps working.
+  const quota = await checkDailyQuestionQuota(
+    context?.env?.VISITS_KV,
+    context?.request
+  );
+  if (!quota.allowed) {
+    return jsonResponse(
+      {
+        reply:
+          'وصلتَ إلى حد الأسئلة اليومي (20 سؤالاً) في منصة أبو معاذ. يمكنك العودة غداً لمتابعة الأسئلة، وشكراً لتفهمك!',
+        rateLimited: true,
+      },
+      200
+    );
+  }
 
   const systemInstruction = buildSystemInstruction(sanitizedContext);
 
