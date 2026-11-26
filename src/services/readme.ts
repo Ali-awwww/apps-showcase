@@ -513,3 +513,87 @@ export async function fetchAllRepoReadmes(
 
   return Object.fromEntries(entries);
 }
+
+// Server-side READMEs (GET /api/readmes) — the same source the assistant
+// context uses, fetched once (authenticated + 5-minute KV cache) instead of
+// up to 16+ unauthenticated GitHub API calls from the browser. On the
+// static GitHub Pages copy there is no Functions endpoint, so any failure
+// returns null and the caller keeps the client-side GitHub data.
+
+export interface ServerReadmeItem {
+  repo: string;
+  status: 'ready' | 'not_found' | 'error';
+  markdown: string | null;
+  htmlUrl: string | null;
+}
+
+export interface ServerReadmesResponse {
+  ok: boolean;
+  source: 'live' | 'cache';
+  apps: ServerReadmeItem[];
+}
+
+export async function fetchServerReadmes(
+  signal?: AbortSignal
+): Promise<ServerReadmeItem[] | null> {
+  try {
+    const response = await fetch('/api/readmes', {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal,
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const data = (await response.json()) as Partial<ServerReadmesResponse>;
+    if (!data || data.ok !== true || !Array.isArray(data.apps)) {
+      return null;
+    }
+    return data.apps as ServerReadmeItem[];
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw error;
+    }
+    return null;
+  }
+}
+
+// Build the readmes map purely from server data. Repos the server could
+// not fetch ('error') are marked as errors here; the caller retries those
+// repos with the direct GitHub fetch as a fallback.
+export function buildReadmesFromServer(
+  items: ServerReadmeItem[]
+): ReadmesMap {
+  const map: ReadmesMap = {};
+  for (const item of items) {
+    if (item.status === 'ready' && item.markdown && item.markdown.trim()) {
+      map[item.repo] = {
+        status: 'ready',
+        exists: true,
+        readme: parseReadmeMarkdown(
+          item.markdown,
+          item.htmlUrl || defaultBlobUrl(item.repo, 'HEAD')
+        ),
+        errorReason: null,
+        errorMessage: null,
+      };
+    } else if (item.status === 'not_found') {
+      map[item.repo] = {
+        status: 'not_found',
+        exists: false,
+        readme: null,
+        errorReason: null,
+        errorMessage: null,
+      };
+    } else {
+      map[item.repo] = {
+        status: 'error',
+        exists: false,
+        readme: null,
+        errorReason: 'unknown',
+        errorMessage: 'تعذّر جلب ملف README من GitHub حالياً.',
+      };
+    }
+  }
+  return map;
+}

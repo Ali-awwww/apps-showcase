@@ -47,6 +47,18 @@ export function GeminiChatbot({ releases, readmes }: GeminiChatbotProps) {
     null
   );
 
+  // Server-side chat session: the client sends only its new message plus
+  // this id; the server alone builds the conversation history (stored in
+  // KV), so a forged 'assistant' turn can never be injected from the
+  // browser. The message list above is display-only.
+  const [sessionId] = useState<string>(() => {
+    try {
+      return crypto.randomUUID();
+    } catch {
+      return `sess-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+  });
+
   const threadEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -70,29 +82,20 @@ export function GeminiChatbot({ releases, readmes }: GeminiChatbotProps) {
     }
   }, [isOpen]);
 
-  const sendMessageToAssistant = async (
-    textToSend: string,
-    baseHistory: ChatMessage[]
-  ) => {
+  const sendMessageToAssistant = async (textToSend: string) => {
     setIsSending(true);
     setErrorMsg(null);
     setFailedMessageText(null);
 
     try {
-      const conversationPayload = baseHistory
-        .filter((m) => m.id !== 'welcome')
-        .map((m) => ({
-          role: m.role,
-          text: m.text,
-        }));
-
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messages: conversationPayload,
+          sessionId,
+          message: textToSend,
           appsContext,
         }),
       });
@@ -143,7 +146,7 @@ export function GeminiChatbot({ releases, readmes }: GeminiChatbotProps) {
     setMessages(nextHistory);
     setInputValue('');
 
-    await sendMessageToAssistant(trimmed, nextHistory);
+    await sendMessageToAssistant(trimmed);
   };
 
   const handleFormSubmit = (e: FormEvent) => {
@@ -155,7 +158,7 @@ export function GeminiChatbot({ releases, readmes }: GeminiChatbotProps) {
     if (!failedMessageText || isSending) {
       return;
     }
-    void sendMessageToAssistant(failedMessageText, messages);
+    void sendMessageToAssistant(failedMessageText);
   };
 
   const handleResetChat = () => {

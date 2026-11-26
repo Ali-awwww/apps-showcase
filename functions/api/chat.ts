@@ -6,17 +6,18 @@ import {
 } from './_lib/latest';
 
 const MODEL_FALLBACK_CHAIN = [
-  'gemini-2.5-flash-lite',
   'gemini-3.5-flash-lite',
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
   'gemini-3.8-flash',
 ] as const;
 
 // Daily per-visitor question quota, enforced with the same KV namespace
 // as the visitor counter (binding VISITS_KV). IPv6 visitors are counted
-// per /64 prefix (see normalizeClientIp). Fail-open: if KV or the client
-// IP is unavailable, the question is answered without counting.
+// per /64 prefix (see normalizeClientIp).
+// Fail-CLOSED: if KV or the client IP is unavailable, the assistant
+// answers "busy" instead of answering without counting.
+// The quota is counted only AFTER a successful model reply, so a failed
+// question never consumes the visitor's allowance (a visitor behind a
+// shared NAT still shares the 20/day IP quota — noted as a limitation).
 const DAILY_QUESTIONS_PER_VISITOR = 20;
 const RATE_LIMIT_TTL_SECONDS = 24 * 60 * 60;
 
@@ -53,36 +54,122 @@ function normalizeClientIp(ip: string): string {
   return trimmed;
 }
 
+interface QuotaCheck {
+  allowed: boolean;
+  unavailable: boolean;
+  key: string | null;
+}
+
 async function checkDailyQuestionQuota(
   kv: any,
   request: Request | undefined
-): Promise<{ allowed: boolean }> {
+): Promise<QuotaCheck> {
   try {
     if (!kv || typeof kv.get !== 'function' || typeof kv.put !== 'function') {
-      return { allowed: true };
+      return { allowed: false, unavailable: true, key: null };
     }
     const ip = getClientIp(request);
     if (!ip) {
-      return { allowed: true };
+      return { allowed: false, unavailable: true, key: null };
     }
     const today = new Date().toISOString().slice(0, 10);
     const key = `rate:${normalizeClientIp(ip)}:${today}`;
     const stored = await kv.get(key);
     const used = stored ? parseInt(stored, 10) || 0 : 0;
     if (used >= DAILY_QUESTIONS_PER_VISITOR) {
-      return { allowed: false };
+      return { allowed: false, unavailable: false, key };
     }
-    await kv.put(key, String(used + 1), {
-      expirationTtl: RATE_LIMIT_TTL_SECONDS,
-    });
-    return { allowed: true };
+    return { allowed: true, unavailable: false, key };
   } catch (err) {
-    console.warn('[Gemini Chat] Rate-limit check failed, failing open:', err);
-    return { allowed: true };
+    console.warn('[Gemini Chat] Rate-limit check failed, failing closed:', err);
+    return { allowed: false, unavailable: true, key: null };
   }
 }
 
-const RETRY_DELAYS_MS = [1000, 2000, 4000] as const;
+// Count one answered question. Best-effort: a KV write failure here must
+// not break an already-successful reply.
+async function incrementDailyQuestionQuota(
+  kv: any,
+  key: string | null
+): Promise<void> {
+  if (!kv || !key || typeof kv.get !== 'function' || typeof kv.put !== 'function') {
+    return;
+  }
+  try {
+    const stored = await kv.get(key);
+    const used = stored ? parseInt(stored, 10) || 0 : 0;
+    await kv.put(key, String(used + 1), {
+      expirationTtl: RATE_LIMIT_TTL_SECONDS,
+    });
+  } catch (err) {
+    console.warn('[Gemini Chat] Quota increment failed:', err);
+  }
+}
+
+// Server-side chat sessions: the server alone builds the conversation
+// history. The client only sends its new message plus a session id; the
+// server loads the previous turns (its own issued replies included) from
+// KV, appends the new user message, and saves the reply back. A forged
+// 'assistant' message from the client can therefore never reach the model.
+const CHAT_SESSION_TTL_SECONDS = 24 * 60 * 60;
+const CHAT_SESSION_MAX_TURNS = 20;
+
+function isValidSessionId(value: string): boolean {
+  return /^[A-Za-z0-9-]{8,64}$/.test(value);
+}
+
+async function loadChatSession(kv: any, sessionId: string): Promise<ChatTurn[]> {
+  try {
+    if (!kv || typeof kv.get !== 'function') {
+      return [];
+    }
+    const raw = await kv.get(`chat-session:${sessionId}`);
+    if (!raw) {
+      return [];
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .filter(
+        (t): t is ChatTurn =>
+          !!t &&
+          typeof t === 'object' &&
+          ((t as ChatTurn).role === 'user' ||
+            (t as ChatTurn).role === 'assistant') &&
+          typeof (t as ChatTurn).text === 'string' &&
+          (t as ChatTurn).text.length > 0
+      )
+      .map((t) => ({ role: t.role, text: t.text.slice(0, 2000) }))
+      .slice(-CHAT_SESSION_MAX_TURNS);
+  } catch {
+    return [];
+  }
+}
+
+async function saveChatSession(
+  kv: any,
+  sessionId: string,
+  turns: ChatTurn[]
+): Promise<void> {
+  try {
+    if (!kv || typeof kv.put !== 'function') {
+      return;
+    }
+    await kv.put(
+      `chat-session:${sessionId}`,
+      JSON.stringify(turns.slice(-CHAT_SESSION_MAX_TURNS)),
+      { expirationTtl: CHAT_SESSION_TTL_SECONDS }
+    );
+  } catch (err) {
+    console.warn('[Gemini Chat] Session save failed:', err);
+  }
+}
+
+// At most 2 models × 2 rounds = 4 Gemini calls per visitor message
+// (was 5 models × 4 rounds = 20). A 429 stops everything immediately.
+const RETRY_DELAYS_MS = [1000] as const;
 const FETCH_TIMEOUT_MS = 20000;
 
 const ALLOWED_REPOS = new Set([
@@ -94,7 +181,10 @@ const ALLOWED_REPOS = new Set([
   'adhan-reminder',
 ]);
 
-interface ClientChatMessage {
+// One conversation turn. The 'assistant' turns in this list are ONLY the
+// replies this server itself issued (stored in a KV session) — never
+// anything the client sent (see the request handler below).
+interface ChatTurn {
   role: 'user' | 'assistant';
   text: string;
 }
@@ -133,6 +223,8 @@ function jsonResponse(payload: unknown, status = 200): Response {
     status,
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
+      'X-Content-Type-Options': 'nosniff',
+      'Access-Control-Allow-Origin': 'https://apps-showcase.pages.dev',
     },
   });
 }
@@ -367,7 +459,7 @@ async function generateChatReplyRest(
   apiKey: string,
   model: string,
   systemInstruction: string,
-  messages: ClientChatMessage[]
+  messages: ChatTurn[]
 ): Promise<string> {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
     model
@@ -459,9 +551,16 @@ export async function onRequestPost(context: any): Promise<Response> {
     );
   }
 
-  let body: { messages?: unknown; appsContext?: unknown };
+  let body: {
+    sessionId?: unknown;
+    message?: unknown;
+    messages?: unknown;
+    appsContext?: unknown;
+  };
   try {
     body = (await context.request.json()) as {
+      sessionId?: unknown;
+      message?: unknown;
       messages?: unknown;
       appsContext?: unknown;
     };
@@ -472,40 +571,62 @@ export async function onRequestPost(context: any): Promise<Response> {
     );
   }
 
-  if (!Array.isArray(body?.messages) || body.messages.length === 0) {
+  // Build the conversation history on the SERVER. The client sends only
+  // its new message (+ a session id). Any 'assistant' message the client
+  // tries to inject is dropped and never reaches the model.
+  const kv = context?.env?.VISITS_KV;
+  const rawSessionId =
+    typeof body?.sessionId === 'string' ? body.sessionId.trim() : '';
+  const sessionId = isValidSessionId(rawSessionId) ? rawSessionId : null;
+
+  let history: ChatTurn[] = [];
+  if (typeof body?.message === 'string') {
+    // New format: single user message; history comes from the KV session.
+    const userText = sanitizeText(body.message, 2000);
+    if (!userText) {
+      return jsonResponse(
+        { error: 'يرجى إرسال نص الرسالة بشكل صحيح.' },
+        400
+      );
+    }
+    const previous = sessionId ? await loadChatSession(kv, sessionId) : [];
+    history = [...previous, { role: 'user' as const, text: userText }];
+  } else if (Array.isArray(body?.messages)) {
+    // Legacy format (older cached frontends): only the visitor's own
+    // messages are used; 'assistant' turns are discarded. Earlier user
+    // questions are folded into one context turn so the model still sees
+    // the thread, and no client-controlled model-role content is sent.
+    const userTexts = body.messages
+      .slice(-20)
+      .map((item) => {
+        if (!item || typeof item !== 'object') {
+          return null;
+        }
+        const m = item as { role?: unknown; text?: unknown };
+        if (m.role !== 'user') {
+          return null;
+        }
+        return sanitizeText(m.text, 2000) || null;
+      })
+      .filter((t): t is string => t !== null);
+    if (userTexts.length === 0) {
+      return jsonResponse(
+        { error: 'يرجى إرسال نص الرسالة بشكل صحيح.' },
+        400
+      );
+    }
+    const current = userTexts[userTexts.length - 1];
+    const earlier = userTexts.slice(0, -1);
+    const combined =
+      earlier.length > 0
+        ? `أسئلة سابقة في هذه المحادثة:\n${earlier
+            .map((t, i) => `${i + 1}. ${t}`)
+            .join('\n')}\n\nالسؤال الحالي: ${current}`
+        : current;
+    history = [{ role: 'user' as const, text: combined }];
+  } else {
     return jsonResponse(
       { error: 'يرجى إرسال نص الرسالة بشكل صحيح.' },
-      400
-    );
-  }
-
-  const sanitizedMessages: ClientChatMessage[] = body.messages
-    .slice(-20)
-    .map((item) => {
-      if (!item || typeof item !== 'object') {
-        return null;
-      }
-      const m = item as { role?: unknown; text?: unknown };
-      const role =
-        m.role === 'assistant'
-          ? ('assistant' as const)
-          : m.role === 'user'
-          ? ('user' as const)
-          : null;
-      const text = sanitizeText(m.text, 2000);
-      if (!role || !text) {
-        return null;
-      }
-      return { role, text };
-    })
-    .filter((m): m is ClientChatMessage => m !== null);
-
-  if (
-    sanitizedMessages.length === 0 ||
-    sanitizedMessages[sanitizedMessages.length - 1].role !== 'user'
-  ) {
-    return jsonResponse(
-      { error: 'يجب أن تنتهي المحادثة برسالة من المستخدم.' },
       400
     );
   }
@@ -582,13 +703,26 @@ export async function onRequestPost(context: any): Promise<Response> {
     })
     .filter((item): item is AppContextSnapshot => item !== null);
 
-  // Daily per-visitor quota (20 questions/day/IP, counted in KV). Over the
+  // Daily per-visitor quota (20 questions/day/IP, counted in KV).
+  // Fail-CLOSED: if the quota cannot be checked (KV unreachable), the
+  // assistant answers "busy" instead of answering without counting.
+  // The quota is counted only AFTER a successful reply (see below), so a
+  // failed question never consumes the visitor's allowance. Over the
   // limit, answer with a polite message as a normal reply — not an error —
   // so the chat UI keeps working.
   const quota = await checkDailyQuestionQuota(
     context?.env?.VISITS_KV,
     context?.request
   );
+  if (quota.unavailable) {
+    return jsonResponse(
+      {
+        error:
+          'المساعد مشغول مؤقتاً، يرجى المحاولة بعد قليل.',
+      },
+      503
+    );
+  }
   if (!quota.allowed) {
     return jsonResponse(
       {
@@ -616,6 +750,7 @@ export async function onRequestPost(context: any): Promise<Response> {
     let lastError: unknown = null;
     let sawHighDemand = false;
     let sawTimeout = false;
+    let sawRateLimit = false;
 
     for (let round = 0; round <= RETRY_DELAYS_MS.length; round++) {
       if (round > 0) {
@@ -639,15 +774,34 @@ export async function onRequestPost(context: any): Promise<Response> {
             apiKey,
             model,
             systemInstruction,
-            sanitizedMessages
+            history
           );
           console.info(
             `[Gemini Chat] Success with model "${model}" (round ${round}).`
           );
+          // Count the quota only now, after a successful reply — and
+          // store the reply in the server-side session for next time.
+          await incrementDailyQuestionQuota(kv, quota.key);
+          if (sessionId) {
+            await saveChatSession(kv, sessionId, [
+              ...history,
+              { role: 'assistant' as const, text: reply },
+            ]);
+          }
           return jsonResponse({ reply, model }, 200);
         } catch (err) {
           lastError = err;
           const { status, message } = extractErrorDetails(err);
+
+          if (status === 429) {
+            // Quota exhausted: stop immediately — do not burn the other
+            // model or the retry round on a limit that will not clear.
+            sawRateLimit = true;
+            console.warn(
+              `[Gemini Chat] Model "${model}" hit 429 (round ${round}): ${message}`
+            );
+            break;
+          }
 
           if (isTimeoutError(err)) {
             sawTimeout = true;
@@ -680,12 +834,12 @@ export async function onRequestPost(context: any): Promise<Response> {
         }
       }
 
-      if (!roundTriedAny || !sawHighDemand) {
+      if (sawRateLimit || !roundTriedAny || !sawHighDemand) {
         break;
       }
     }
 
-    if (sawHighDemand || sawTimeout) {
+    if (sawRateLimit || sawHighDemand || sawTimeout) {
       return jsonResponse(
         {
           error:

@@ -6,13 +6,18 @@ import {
   Download,
   ExternalLink,
   ImageOff,
+  Play,
+  RefreshCw,
   RotateCw,
 } from 'lucide-react';
 import { AppGeometricIcon } from '../components/AppGeometricIcon';
 import { MarkdownContent } from '../components/MarkdownContent';
 import { QrCodeBox } from '../components/QrCodeBox';
 import { ReleaseNotes } from '../components/ReleaseNotes';
+import { ShareButton } from '../components/ShareButton';
+import { buildAppShareUrl, buildShareText } from '../lib/share';
 import { APPS_CATALOG, getRepoGithubUrl } from '../data/apps';
+import { buildOpenAppIntentUrl, isAndroid } from '../lib/openApp';
 import { formatFileSize } from '../services/github';
 import { ReadmesMap, ReleasesMap } from '../types/app';
 
@@ -76,6 +81,19 @@ export function AppDetailPage({
   const hasApk = hasRelease && Boolean(release.apkUrl);
   const apkSizeLabel = hasRelease ? formatFileSize(release.apkSizeBytes) : null;
   const githubRepoUrl = getRepoGithubUrl(app.repo);
+
+  // "Open the app" button: only on Android, only for apps shipped as Android
+  // apps. Uses the app's custom URL scheme (which the app must declare);
+  // falls back to the APK download when the app is not installed or its
+  // installed version predates the scheme.
+  const showOpenApp = isAndroid() && Boolean(app.androidPackage) && Boolean(app.androidScheme);
+  const openAppUrl = showOpenApp
+    ? buildOpenAppIntentUrl(
+        app.androidScheme as string,
+        app.androidPackage as string,
+        release?.apkUrl ?? `${githubRepoUrl}/releases`,
+      )
+    : null;
 
   const readme = readmeState.readme;
   const hasReadme = readmeState.status === 'ready' && readmeState.exists && readme !== null;
@@ -172,6 +190,12 @@ export function AppDetailPage({
               <span>عرض المستودع على GitHub</span>
               <ExternalLink className="w-4 h-4 shrink-0" aria-hidden="true" />
             </a>
+
+            <ShareButton
+              title={`${app.name} — منصة أبو معاذ`}
+              text={buildShareText(app.name)}
+              url={buildAppShareUrl(app.repo)}
+            />
           </div>
         </div>
 
@@ -231,15 +255,35 @@ export function AppDetailPage({
           <div className="flex-1 space-y-3">
             {hasApk && release?.apkUrl ? (
               <>
-                <a
-                  href={release.apkUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="cyber-btn-primary w-full sm:w-auto min-h-[54px] px-7 py-3.5 rounded-xl font-bold text-base inline-flex items-center justify-center gap-3"
-                >
-                  <Download className="w-5 h-5 shrink-0" aria-hidden="true" />
-                  <span>تحميل APK</span>
-                </a>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                  <a
+                    href={release.apkUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="cyber-btn-primary w-full sm:w-auto min-h-[54px] px-7 py-3.5 rounded-xl font-bold text-base inline-flex items-center justify-center gap-3"
+                  >
+                    {showOpenApp ? (
+                      <RefreshCw className="w-5 h-5 shrink-0" aria-hidden="true" />
+                    ) : (
+                      <Download className="w-5 h-5 shrink-0" aria-hidden="true" />
+                    )}
+                    <span>{showOpenApp ? 'تحديث' : 'تحميل APK'}</span>
+                  </a>
+                  {showOpenApp && openAppUrl && (
+                    <a
+                      href={openAppUrl}
+                      className="w-full sm:w-auto min-h-[54px] px-7 py-3.5 rounded-xl font-bold text-base text-emerald-100 bg-emerald-950/60 border border-emerald-400/40 hover:border-emerald-300 hover:text-white transition-colors inline-flex items-center justify-center gap-3"
+                    >
+                      <Play className="w-5 h-5 shrink-0" aria-hidden="true" />
+                      <span>افتح التطبيق</span>
+                    </a>
+                  )}
+                </div>
+                {showOpenApp && openAppUrl && (
+                  <p className="text-xs sm:text-sm text-slate-400">
+                    يفتح التطبيق مباشرة إن كان مثبّتاً على هاتفك، وإلا ينقلك إلى تحميله. وزر «تحديث» ينزّل أحدث نسخة؛ ثبّتها فوق نسختك الحالية لتحديث التطبيق.
+                  </p>
+                )}
                 <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs sm:text-sm text-slate-400">
                   {release.apkName && (
                     <span className="font-mono-tabular text-slate-300" dir="ltr">

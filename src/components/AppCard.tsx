@@ -1,10 +1,13 @@
-import { ArrowLeft, Download } from 'lucide-react';
+import { ArrowLeft, Download, Play, RefreshCw } from 'lucide-react';
 import {
   AppDefinition,
   RepoReadmeState,
   RepoReleaseState,
 } from '../types/app';
 import { AppGeometricIcon } from './AppGeometricIcon';
+import { ShareButton } from './ShareButton';
+import { buildAppShareUrl, buildShareText } from '../lib/share';
+import { buildOpenAppIntentUrl, isAndroid } from '../lib/openApp';
 
 interface AppCardProps {
   app: AppDefinition;
@@ -23,6 +26,20 @@ export function AppCard({
   const hasRelease = status === 'ready' && release !== null;
   const hasApk = hasRelease && Boolean(release.apkUrl);
   const isNew = hasRelease && release.isNew;
+
+  // "Open the app" button: only on Android, only for apps shipped as Android
+  // apps with a downloadable APK. Uses the app's custom URL scheme (which
+  // the app must declare); falls back to the APK download when the app is
+  // not installed or its installed version predates the scheme.
+  const showOpenApp =
+    isAndroid() && hasApk && Boolean(app.androidPackage) && Boolean(app.androidScheme);
+  const openAppUrl = showOpenApp
+    ? buildOpenAppIntentUrl(
+        app.androidScheme as string,
+        app.androidPackage as string,
+        release?.apkUrl as string,
+      )
+    : null;
 
   const handleCardClick = (e: React.MouseEvent<HTMLElement>) => {
     const target = e.target as HTMLElement;
@@ -154,8 +171,12 @@ export function AppCard({
             rel="noopener noreferrer"
             className="cyber-btn-primary flex-1 min-h-[48px] px-4 py-2.5 rounded-lg font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap"
           >
-            <Download className="w-4 h-4 shrink-0" aria-hidden="true" />
-            <span>تحميل APK</span>
+            {showOpenApp ? (
+              <RefreshCw className="w-4 h-4 shrink-0" aria-hidden="true" />
+            ) : (
+              <Download className="w-4 h-4 shrink-0" aria-hidden="true" />
+            )}
+            <span>{showOpenApp ? 'تحديث' : 'تحميل APK'}</span>
           </a>
         ) : (
           <button
@@ -168,6 +189,16 @@ export function AppCard({
           </button>
         )}
 
+        {showOpenApp && openAppUrl && (
+          <a
+            href={openAppUrl}
+            className="min-h-[48px] px-4 py-2.5 rounded-lg font-semibold text-sm text-emerald-200 bg-emerald-950/60 border border-emerald-400/40 hover:border-emerald-300 hover:text-white transition-colors flex items-center justify-center gap-2 whitespace-nowrap shrink-0"
+          >
+            <Play className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span>افتح التطبيق</span>
+          </a>
+        )}
+
         <button
           type="button"
           onClick={() => onOpenDetails(app.repo)}
@@ -176,6 +207,12 @@ export function AppCard({
           <span>التفاصيل</span>
           <ArrowLeft className="w-4 h-4 shrink-0" aria-hidden="true" />
         </button>
+
+        <ShareButton
+          title={`${app.name} — منصة أبو معاذ`}
+          text={buildShareText(app.name)}
+          url={buildAppShareUrl(app.repo)}
+        />
       </div>
     </article>
   );

@@ -8,13 +8,19 @@ export type AppIconId =
   | 'abu-jrin-market'
   | '-Vibe-coding'
   | '-AW'
-  | 'adhan-reminder';
+  | 'adhan-reminder'
+  | 'sadiq-al-muslim'
+  | 'sibaq-al-maalumat';
 
 export interface AppDefinition {
   repo: string;
   name: string;
   category: AppCategory;
   iconId: AppIconId;
+  /** Android applicationId, when the app ships as an Android app. Used by the "Open the app" button (intent URL). Absent for web-only apps. */
+  androidPackage?: string;
+  /** Custom URL scheme the Android app declares (intent-filter). Required for the "Open the app" button to launch it. */
+  androidScheme?: string;
 }
 
 export interface GitHubReleaseAsset {

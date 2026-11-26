@@ -1,6 +1,8 @@
 import { AlertTriangle, RotateCw, Search, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AppCard } from '../components/AppCard';
+import { ShareButton } from '../components/ShareButton';
+import { buildPlatformShareUrl, buildShareText } from '../lib/share';
 import { APPS_CATALOG, FILTER_CATEGORIES } from '../data/apps';
 import { FilterCategory, ReadmesMap, ReleasesMap } from '../types/app';
 
@@ -132,6 +134,15 @@ export function HomePage({
             مع تحديث فوري لرقم الإصدار وتاريخ النشر وملاحظات التغيير وتفاصيل
             ملفات README مباشرة من GitHub.
           </p>
+
+          <div className="pt-1 flex flex-wrap items-center gap-2.5">
+            <ShareButton
+              title="منصة أبو معاذ"
+              text={buildShareText()}
+              url={buildPlatformShareUrl()}
+              label="شارك المنصة"
+            />
+          </div>
         </div>
       </section>
 

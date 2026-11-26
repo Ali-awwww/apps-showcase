@@ -18,6 +18,8 @@ export const APPS: Array<{ repo: string; name: string; category: string }> = [
   { repo: '-Vibe-coding', name: 'فيب كودينغ', category: 'تطوير' },
   { repo: '-AW', name: 'AW', category: 'أدوات' },
   { repo: 'adhan-reminder', name: 'مذكر الأذان', category: 'إسلامي' },
+  { repo: 'sadiq-al-muslim', name: 'صديق المسلم', category: 'إسلامي' },
+  { repo: 'sibaq-al-maalumat', name: 'سباق المعلومات', category: 'إسلامي' },
 ];
 
 export interface LatestReleaseItem {

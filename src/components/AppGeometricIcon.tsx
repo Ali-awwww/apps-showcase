@@ -222,6 +222,96 @@ export function AppGeometricIcon({
             <circle cx="24" cy="23" r="2.2" fill="#00b4ff" />
           </>
         );
+
+      case 'sadiq-al-muslim':
+        return (
+          <>
+            <polygon
+              points="10,14 24,19 24,36 10,31"
+              fill="rgba(0, 180, 255, 0.08)"
+              stroke="#38bdf8"
+              strokeWidth="1.5"
+            />
+            <polygon
+              points="38,14 24,19 24,36 38,31"
+              fill="rgba(0, 180, 255, 0.08)"
+              stroke="#38bdf8"
+              strokeWidth="1.5"
+            />
+            <line
+              x1="24"
+              y1="19"
+              x2="24"
+              y2="36"
+              stroke="#00b4ff"
+              strokeWidth="1.6"
+            />
+            <line
+              x1="13"
+              y1="21"
+              x2="20"
+              y2="24"
+              stroke="#38bdf8"
+              strokeWidth="1.2"
+              strokeOpacity="0.65"
+            />
+            <line
+              x1="13"
+              y1="27"
+              x2="20"
+              y2="30"
+              stroke="#38bdf8"
+              strokeWidth="1.2"
+              strokeOpacity="0.65"
+            />
+            <line
+              x1="28"
+              y1="24"
+              x2="35"
+              y2="21"
+              stroke="#38bdf8"
+              strokeWidth="1.2"
+              strokeOpacity="0.65"
+            />
+            <line
+              x1="28"
+              y1="30"
+              x2="35"
+              y2="27"
+              stroke="#38bdf8"
+              strokeWidth="1.2"
+              strokeOpacity="0.65"
+            />
+          </>
+        );
+
+      case 'sibaq-al-maalumat':
+        return (
+          <>
+            <line
+              x1="12"
+              y1="6"
+              x2="12"
+              y2="42"
+              stroke="#38bdf8"
+              strokeWidth="1.6"
+            />
+            <circle cx="12" cy="6" r="1.8" fill="#00b4ff" />
+            <rect
+              x="14"
+              y="8"
+              width="24"
+              height="14"
+              fill="rgba(0, 180, 255, 0.08)"
+              stroke="#38bdf8"
+              strokeWidth="1.5"
+            />
+            <rect x="14" y="8" width="6" height="7" fill="#00b4ff" />
+            <rect x="26" y="8" width="6" height="7" fill="#00b4ff" />
+            <rect x="20" y="15" width="6" height="7" fill="#00b4ff" />
+            <rect x="32" y="15" width="6" height="7" fill="#00b4ff" />
+          </>
+        );
     }
   };
 

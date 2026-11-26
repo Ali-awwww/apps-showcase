@@ -36,7 +36,6 @@ export interface ServerLatestResponse {
   source: 'live' | 'cache' | 'stale-cache' | 'empty';
   fetchedAt: string;
   ageText: string;
-  githubAuthenticated: boolean;
   partialFailure: boolean;
   latest: ServerLatestApp | null;
   apps: ServerLatestApp[];
@@ -67,6 +66,57 @@ export async function fetchServerLatest(
   }
 }
 
+// Convert one server-side latest item into a client release state.
+function serverItemToReleaseState(item: ServerLatestApp): RepoReleaseState {
+  if (item.hasRelease && item.tag && item.publishedAt) {
+    const release: ParsedRelease = {
+      tagName: item.tag,
+      publishedAt: item.publishedAt,
+      formattedDate:
+        item.damascusDate ?? formatArabicDate(item.publishedAt),
+      body: item.body ?? '',
+      htmlUrl: item.htmlUrl ?? '',
+      apkUrl: item.apkUrl,
+      apkName: item.apkName,
+      apkSizeBytes: item.apkSizeBytes,
+      isNew: item.isNew ?? isWithinLastSevenDays(item.publishedAt),
+    };
+    return {
+      status: 'ready',
+      release,
+      errorReason: null,
+      errorMessage: null,
+    };
+  }
+  return {
+    status: 'not_found',
+    release: null,
+    errorReason: null,
+    errorMessage: null,
+  };
+}
+
+// Build the releases map purely from server data (GET /api/latest) — the
+// primary path. Apps without a release become 'not_found' instead of
+// staying 'loading'.
+export function buildReleasesFromServer(
+  server: ServerLatestResponse
+): ReleasesMap {
+  const map: ReleasesMap = {};
+  for (const app of APPS_CATALOG) {
+    const item = server.apps.find((a) => a.repo === app.repo);
+    map[app.repo] = item
+      ? serverItemToReleaseState(item)
+      : {
+          status: 'not_found',
+          release: null,
+          errorReason: null,
+          errorMessage: null,
+        };
+  }
+  return map;
+}
+
 // Merge server data into the client-side releases map. A server entry with
 // a release always wins (same data the assistant answers from); a server
 // entry without a release keeps the client-side entry when the client
@@ -84,25 +134,7 @@ export function mergeServerLatestIntoReleases(
       continue;
     }
     if (item.hasRelease && item.tag && item.publishedAt) {
-      const release: ParsedRelease = {
-        tagName: item.tag,
-        publishedAt: item.publishedAt,
-        formattedDate:
-          item.damascusDate ?? formatArabicDate(item.publishedAt),
-        body: item.body ?? '',
-        htmlUrl: item.htmlUrl ?? '',
-        apkUrl: item.apkUrl,
-        apkName: item.apkName,
-        apkSizeBytes: item.apkSizeBytes,
-        isNew: item.isNew ?? isWithinLastSevenDays(item.publishedAt),
-      };
-      const state: RepoReleaseState = {
-        status: 'ready',
-        release,
-        errorReason: null,
-        errorMessage: null,
-      };
-      merged[app.repo] = state;
+      merged[app.repo] = serverItemToReleaseState(item);
     } else if (
       merged[app.repo]?.status !== 'ready' &&
       merged[app.repo]?.status !== 'loading'

@@ -12,12 +12,14 @@ import {
   fetchAllRepoReleases,
 } from './services/github';
 import {
+  buildReleasesFromServer,
   fetchServerLatest,
-  mergeServerLatestIntoReleases,
 } from './services/latest';
 import {
+  buildReadmesFromServer,
   createInitialReadmeLoadingState,
   fetchAllRepoReadmes,
+  fetchServerReadmes,
 } from './services/readme';
 import { ReadmesMap, ReleasesMap } from './types/app';
 
@@ -55,22 +57,58 @@ export default function App() {
     setReadmes(createInitialReadmeLoadingState(APPS_CATALOG));
 
     try {
-      const [releaseResults, readmeResults, serverLatest] =
-        await Promise.all([
-          fetchAllRepoReleases(APPS_CATALOG, controller.signal),
-          fetchAllRepoReadmes(APPS_CATALOG, controller.signal),
-          fetchServerLatest(controller.signal),
-        ]);
+      // Server data first (GET /api/latest + /api/readmes): one
+      // authenticated, KV-cached call each — instead of up to 16+
+      // unauthenticated GitHub API calls from the visitor's browser
+      // (60/hour limit, shared behind NAT). The direct GitHub fetch is
+      // only a fallback when the server endpoint is unavailable (static
+      // GitHub Pages copy) or when a repo failed server-side.
+      const [serverLatest, serverReadmes] = await Promise.all([
+        fetchServerLatest(controller.signal),
+        fetchServerReadmes(controller.signal),
+      ]);
+
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      let releases: ReleasesMap;
+      if (serverLatest) {
+        releases = buildReleasesFromServer(serverLatest);
+      } else {
+        releases = await fetchAllRepoReleases(
+          APPS_CATALOG,
+          controller.signal
+        );
+      }
+
+      let readmes: ReadmesMap;
+      if (serverReadmes) {
+        readmes = buildReadmesFromServer(serverReadmes);
+        const errorRepos = serverReadmes
+          .filter((item) => item.status === 'error')
+          .map((item) => item.repo);
+        if (errorRepos.length > 0 && !controller.signal.aborted) {
+          const fallbackApps = APPS_CATALOG.filter((app) =>
+            errorRepos.includes(app.repo)
+          );
+          const fallback = await fetchAllRepoReadmes(
+            fallbackApps,
+            controller.signal
+          );
+          for (const [repo, state] of Object.entries(fallback)) {
+            if (state.status === 'ready') {
+              readmes[repo] = state;
+            }
+          }
+        }
+      } else {
+        readmes = await fetchAllRepoReadmes(APPS_CATALOG, controller.signal);
+      }
 
       if (!controller.signal.aborted) {
-        // Server data (GET /api/latest) is the same source the assistant
-        // answers from; fall back to the client-side GitHub fetch when the
-        // endpoint is unavailable (static GitHub Pages copy).
-        const releases = serverLatest
-          ? mergeServerLatestIntoReleases(releaseResults, serverLatest)
-          : releaseResults;
         setReleases(releases);
-        setReadmes(readmeResults);
+        setReadmes(readmes);
         setLatestAgeText(serverLatest?.ageText ?? null);
       }
     } catch (error) {
