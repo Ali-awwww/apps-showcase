@@ -48,7 +48,6 @@ export const TUTORIALS: Tutorial[] = [
       },
     ],
     inviteCodes: ['MGFX96', 'JW6TN8'],
-    video: '/muse-from-egypt.mp4',
     links: [
       {
         label: 'تحميل من Google Play',
