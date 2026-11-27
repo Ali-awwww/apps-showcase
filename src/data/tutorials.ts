@@ -60,7 +60,10 @@ export const TUTORIALS: Tutorial[] = [
         label: 'افتح muse.ai',
         url: 'https://muse.ai',
       },
+      {
+        label: 'تحميل Proton VPN مباشرة (APK)',
+        url: 'https://liteapks.com/download/proton-vpn-837621',
+      },
     ],
-    note: 'الكود يعمل 30 مرة فقط، وبقي منه 29 استخدامًا. أبقِ الـ VPN مشغلًا على أمريكا أثناء استخدام موس.',
   },
 ];
