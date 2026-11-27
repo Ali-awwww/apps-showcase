@@ -9,7 +9,7 @@ interface TutorialDetailPageProps {
 
 export function TutorialDetailPage({ tutorialId, onBack }: TutorialDetailPageProps) {
   const tutorial = TUTORIALS.find((t) => t.id === tutorialId);
-  const [copied, setCopied] = useState(false);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   if (!tutorial) {
     return (
@@ -34,14 +34,13 @@ export function TutorialDetailPage({ tutorialId, onBack }: TutorialDetailPagePro
     );
   }
 
-  const copyCode = async () => {
-    if (!tutorial.inviteCode) return;
+  const copyCode = async (code: string) => {
     try {
-      await navigator.clipboard.writeText(tutorial.inviteCode);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(code);
+      setCopiedCode(code);
+      window.setTimeout(() => setCopiedCode(null), 2000);
     } catch {
-      setCopied(false);
+      setCopiedCode(null);
     }
   };
 
@@ -65,6 +64,21 @@ export function TutorialDetailPage({ tutorialId, onBack }: TutorialDetailPagePro
         </p>
       </div>
 
+      {tutorial.video && (
+        <section className="space-y-3">
+          <h2 className="font-display text-base font-bold text-sky-200">
+            فيديو الشرح
+          </h2>
+          <video
+            src={tutorial.video}
+            controls
+            playsInline
+            preload="metadata"
+            className="w-full rounded-2xl border border-sky-400/25 bg-black"
+          />
+        </section>
+      )}
+
       <ol className="space-y-5">
         {tutorial.steps.map((step, idx) => (
           <li key={idx} className="cyber-card rounded-2xl p-5 space-y-2">
@@ -83,34 +97,38 @@ export function TutorialDetailPage({ tutorialId, onBack }: TutorialDetailPagePro
         ))}
       </ol>
 
-      {tutorial.inviteCode && (
+      {tutorial.inviteCodes && tutorial.inviteCodes.length > 0 && (
         <section className="cyber-card rounded-2xl p-5 space-y-3">
           <h2 className="font-display text-base font-bold text-sky-200">
-            كود الدعوة
+            أكواد الدعوة
           </h2>
           <div className="flex flex-wrap items-center gap-3">
-            <code
-              dir="ltr"
-              className="font-mono-tabular text-lg font-bold px-4 py-2.5 rounded-xl bg-[#030917] border border-sky-400/30 text-sky-200 tracking-widest"
-            >
-              {tutorial.inviteCode}
-            </code>
-            <button
-              type="button"
-              onClick={copyCode}
-              className="min-h-[44px] px-4 py-2 rounded-xl font-semibold text-sm text-sky-200 bg-[#081530] border border-sky-400/30 hover:border-[#00b4ff] hover:text-white transition-colors inline-flex items-center gap-2"
-            >
-              {copied ? (
-                <Check className="w-4 h-4 shrink-0" aria-hidden="true" />
-              ) : (
-                <Copy className="w-4 h-4 shrink-0" aria-hidden="true" />
-              )}
-              <span>{copied ? 'تم النسخ' : 'نسخ الكود'}</span>
-            </button>
+            {tutorial.inviteCodes.map((code) => (
+              <div key={code} className="flex items-center gap-2">
+                <code
+                  dir="ltr"
+                  className="font-mono-tabular text-lg font-bold px-4 py-2.5 rounded-xl bg-[#030917] border border-sky-400/30 text-sky-200 tracking-widest"
+                >
+                  {code}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => copyCode(code)}
+                  className="min-h-[44px] px-3 py-2 rounded-xl font-semibold text-sm text-sky-200 bg-[#081530] border border-sky-400/30 hover:border-[#00b4ff] hover:text-white transition-colors inline-flex items-center gap-2"
+                >
+                  {copiedCode === code ? (
+                    <Check className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  ) : (
+                    <Copy className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  )}
+                  <span>{copiedCode === code ? 'تم النسخ' : 'نسخ'}</span>
+                </button>
+              </div>
+            ))}
           </div>
           <p className="text-sm text-slate-300 leading-relaxed break-words">
-            أدخل الكود خلال 48 ساعة من إنشاء الحساب. تحصل على مليار رمز، ويحصل
-            صاحب الكود على مليار رمز أيضًا.
+            أدخل أحد الكودين خلال 48 ساعة من إنشاء الحساب. تحصل على مليار رمز،
+            ويحصل صاحب الكود على مليار رمز أيضًا.
           </p>
         </section>
       )}

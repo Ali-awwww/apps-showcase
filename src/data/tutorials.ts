@@ -13,9 +13,10 @@ export interface Tutorial {
   title: string;
   description: string;
   steps: TutorialStep[];
-  inviteCode?: string;
+  inviteCodes?: string[];
   links: TutorialLink[];
   note?: string;
+  video?: string;
 }
 
 export const TUTORIALS: Tutorial[] = [
@@ -46,7 +47,8 @@ export const TUTORIALS: Tutorial[] = [
         text: 'بعد إنشاء الحساب، أدخل الكود MGFX96 خلال 48 ساعة. تحصل على مليار رمز، ويحصل صاحب الكود على مليار رمز أيضًا.',
       },
     ],
-    inviteCode: 'MGFX96',
+    inviteCodes: ['MGFX96', 'JW6TN8'],
+    video: '/muse-from-egypt.mp4',
     links: [
       {
         label: 'تحميل من Google Play',
