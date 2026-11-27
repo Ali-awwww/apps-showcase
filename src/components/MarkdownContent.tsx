@@ -35,7 +35,7 @@ function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sky-300 underline decoration-sky-400/50 hover:text-white transition-colors"
+            className="text-sky-300 underline decoration-sky-400/50 hover:text-white transition-colors break-words"
           >
             {label}
           </a>
@@ -48,7 +48,7 @@ function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
         <code
           key={`${keyPrefix}-code-${partIdx++}`}
           dir="ltr"
-          className="font-mono-tabular text-xs sm:text-[13px] px-1.5 py-0.5 rounded bg-[#030917] border border-sky-400/20 text-sky-200"
+          className="font-mono-tabular text-xs sm:text-[13px] px-1.5 py-0.5 rounded bg-[#030917] border border-sky-400/20 text-sky-200 break-words"
         >
           {match[4]}
         </code>
@@ -94,7 +94,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
         className="space-y-1.5 pr-5 list-disc text-slate-300 text-sm sm:text-[15px] leading-relaxed"
       >
         {listItems.map((item, idx) => (
-          <li key={idx}>{renderInlineMarkdown(item, `${keyPrefix}-li-${idx}`)}</li>
+          <li key={idx} className="break-words">{renderInlineMarkdown(item, `${keyPrefix}-li-${idx}`)}</li>
         ))}
       </ul>
     );
@@ -172,7 +172,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
         blocks.push(
           <blockquote
             key={`q-${index}`}
-            className="rounded-lg bg-[#051026] border border-sky-400/20 px-4 py-2.5 text-sm text-sky-100 leading-relaxed"
+            className="rounded-lg bg-[#051026] border border-sky-400/20 px-4 py-2.5 text-sm text-sky-100 leading-relaxed break-words"
           >
             {renderInlineMarkdown(quoteText, `q-${index}`)}
           </blockquote>
@@ -184,7 +184,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
     blocks.push(
       <p
         key={`p-${index}`}
-        className="text-sm sm:text-[15px] text-slate-300 leading-relaxed"
+        className="text-sm sm:text-[15px] text-slate-300 leading-relaxed break-words"
       >
         {renderInlineMarkdown(line, `p-${index}`)}
       </p>

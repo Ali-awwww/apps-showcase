@@ -10,6 +10,8 @@ interface NavbarProps {
 export function Navbar({ currentPath, onNavigate }: NavbarProps) {
   const isHome = currentPath === '/' || currentPath === '';
   const isNew = currentPath === '/new';
+  const isTutorials =
+    currentPath === '/tutorials' || currentPath.startsWith('/tutorials/');
 
   return (
     <header className="sticky top-0 z-40 min-h-14 bg-[#030712]/90 backdrop-blur-md border-b border-sky-400/20">
@@ -59,6 +61,20 @@ export function Navbar({ currentPath, onNavigate }: NavbarProps) {
             }`}
           >
             ما الجديد
+          </a>
+          <a
+            href="#/tutorials"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigate('/tutorials');
+            }}
+            className={`py-1.5 border-b-2 transition-colors whitespace-nowrap shrink-0 ${
+              isTutorials
+                ? 'border-[#00b4ff] text-sky-300'
+                : 'border-transparent text-slate-300 hover:text-white hover:border-sky-400/40'
+            }`}
+          >
+            الشروحات
           </a>
         </nav>
 

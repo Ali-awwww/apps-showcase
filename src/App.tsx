@@ -6,6 +6,8 @@ import { Navbar } from './components/Navbar';
 import { APPS_CATALOG } from './data/apps';
 import { AppDetailPage } from './pages/AppDetailPage';
 import { HomePage } from './pages/HomePage';
+import { TutorialDetailPage } from './pages/TutorialDetailPage';
+import { TutorialsPage } from './pages/TutorialsPage';
 import { WhatsNewPage } from './pages/WhatsNewPage';
 import {
   createInitialLoadingState,
@@ -195,6 +197,32 @@ export default function App() {
           onRetry={loadAllData}
           onOpenDetails={openDetails}
           onBackHome={() => navigate('/')}
+        />
+      );
+    }
+
+    if (route === '/tutorials') {
+      return (
+        <TutorialsPage
+          onOpenTutorial={(id) => navigate(`/tutorials/${id}`)}
+          onBackHome={() => navigate('/')}
+        />
+      );
+    }
+
+    if (route.startsWith('/tutorials/')) {
+      const tutorialId = route.slice('/tutorials/'.length);
+      let decodedId = tutorialId;
+      try {
+        decodedId = decodeURIComponent(tutorialId);
+      } catch {
+        decodedId = tutorialId;
+      }
+
+      return (
+        <TutorialDetailPage
+          tutorialId={decodedId}
+          onBack={() => navigate('/tutorials')}
         />
       );
     }

@@ -28,7 +28,7 @@ export function ReleaseNotes({ body, compact = false }: ReleaseNotesProps) {
         className="space-y-1.5 pr-4 list-disc text-slate-300 text-sm sm:text-[15px] leading-relaxed"
       >
         {listItems.map((item, idx) => (
-          <li key={idx}>{item}</li>
+          <li key={idx} className="break-words">{item}</li>
         ))}
       </ul>
     );
@@ -68,7 +68,7 @@ export function ReleaseNotes({ body, compact = false }: ReleaseNotesProps) {
     blocks.push(
       <p
         key={`p-${index}`}
-        className="text-sm sm:text-[15px] text-slate-300 leading-relaxed"
+        className="text-sm sm:text-[15px] text-slate-300 leading-relaxed break-words"
       >
         {line}
       </p>

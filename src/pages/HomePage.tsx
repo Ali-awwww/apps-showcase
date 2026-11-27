@@ -146,6 +146,29 @@ export function HomePage({
         </div>
       </section>
 
+      <section
+        aria-label="قسم الشروحات"
+        className="relative rounded-2xl border border-sky-400/25 bg-[#060f24]/90 p-6 sm:p-8 overflow-hidden"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-2">
+            <h2 className="font-display text-xl font-bold text-white">
+              قسم الشروحات
+            </h2>
+            <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
+              شرح خطوة بخطوة: كيف تستخدم موس من مصر رغم الحظر — VPN مجاني،
+              تحميل التطبيق، إنشاء حساب، وكود الدعوة.
+            </p>
+          </div>
+          <a
+            href="#/tutorials"
+            className="cyber-btn-primary min-h-[48px] px-5 py-2.5 rounded-xl font-bold text-sm inline-flex items-center justify-center gap-2 whitespace-nowrap shrink-0"
+          >
+            اقرأ الشرح
+          </a>
+        </div>
+      </section>
+
       <section aria-label="البحث والتصفية" className="space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center gap-4">
           <div className="relative flex-1">
