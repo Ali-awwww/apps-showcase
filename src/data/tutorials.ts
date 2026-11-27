@@ -63,7 +63,7 @@ export const TUTORIALS: Tutorial[] = [
       },
       {
         label: 'تحميل Proton VPN مباشرة (APK)',
-        url: 'https://liteapks.com/download/proton-vpn-837621',
+        url: 'https://liteapks.com/download/proton-vpn-837621/1',
       },
     ],
   },
