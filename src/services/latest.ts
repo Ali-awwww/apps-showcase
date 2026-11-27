@@ -73,7 +73,7 @@ function serverItemToReleaseState(item: ServerLatestApp): RepoReleaseState {
       tagName: item.tag,
       publishedAt: item.publishedAt,
       formattedDate:
-        item.damascusDate ?? formatArabicDate(item.publishedAt),
+        item.damascus ?? formatArabicDate(item.publishedAt),
       body: item.body ?? '',
       htmlUrl: item.htmlUrl ?? '',
       apkUrl: item.apkUrl,

@@ -15,11 +15,19 @@ export function formatArabicDate(isoDate: string): string {
     return isoDate;
   }
 
-  return new Intl.DateTimeFormat('ar-EG', {
+  const datePart = new Intl.DateTimeFormat('ar-u-nu-latn', {
+    timeZone: 'Asia/Damascus',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   }).format(date);
+  const timePart = new Intl.DateTimeFormat('ar-u-nu-latn', {
+    timeZone: 'Asia/Damascus',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(date);
+  return `${datePart}، ${timePart}`;
 }
 
 export function isWithinLastSevenDays(isoDate: string): boolean {
